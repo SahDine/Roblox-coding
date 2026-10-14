@@ -159,8 +159,17 @@ local function makeLabel(name: string, text: string, color: Color3, order: numbe
 	return label
 end
 
--- Billboard above the critter: mutation, name, rarity, income and optional price.
-function UnitModelBuilder.CreateInfoBillboard(model: Model, unitName: string, mutation: string, priceText: string?, robuxText: string?)
+-- Billboard above the critter: mutation, name, rarity, income, optional price and evolution.
+-- showEvolution adds an "EvolveTimer" label whose text is updated by the client (WorldController)
+-- from the model's EvolveAt attribute.
+function UnitModelBuilder.CreateInfoBillboard(
+	model: Model,
+	unitName: string,
+	mutation: string,
+	priceText: string?,
+	robuxText: string?,
+	showEvolution: boolean?
+)
 	local def = Units.ByName[unitName]
 	local root = model.PrimaryPart
 	if not def or not root then
@@ -201,6 +210,10 @@ function UnitModelBuilder.CreateInfoBillboard(model: Model, unitName: string, mu
 	end
 	if robuxText then
 		makeLabel("Robux", robuxText, Color3.fromRGB(120, 255, 160), 6, 0.16).Parent = billboard
+	end
+	if def.EvolvesTo then
+		local text = if showEvolution then "🧬 ..." else `🧬 Evolves into {def.EvolvesTo}`
+		makeLabel("EvolveTimer", text, Color3.fromRGB(150, 220, 255), 7, 0.16).Parent = billboard
 	end
 
 	billboard.Parent = root

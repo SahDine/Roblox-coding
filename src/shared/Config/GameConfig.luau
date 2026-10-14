@@ -73,6 +73,23 @@ GameConfig.Steal = {
 	AnnounceFromRarity = "Legendary", -- Server-wide message when this rarity or better is stolen.
 }
 
+-- Evolution: a critter placed in a base gains 1 XP per second. When its XP reaches the time
+-- below (chosen by the rarity of the NEXT form) the owner can evolve it for a share of the next
+-- form's price. Mutations are kept. XP is kept when a critter is stolen.
+GameConfig.Evolution = {
+	CostFraction = 0.5, -- evolving costs 50% of the evolved form's price
+	TimeByRarity = {
+		Uncommon = 90,
+		Rare = 180,
+		Epic = 420,
+		Legendary = 900,
+		Mythic = 1_800,
+		Secret = 3_600,
+	},
+	FastEvolveMultiplier = 2, -- XP speed with the "Fast Evolution" game pass
+	AnnounceFromRarity = "Epic", -- server-wide message when evolving into this rarity or better
+}
+
 GameConfig.Lock = {
 	Duration = 60,
 }

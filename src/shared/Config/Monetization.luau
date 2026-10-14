@@ -43,6 +43,13 @@ Monetization.GamePasses = {
 		Icon = "⚡",
 		DisplayPrice = 179,
 	},
+	FastEvolve = {
+		Id = 0,
+		Name = "Fast Evolution",
+		Description = "Your critters evolve 2x faster",
+		Icon = "🧬",
+		DisplayPrice = 149,
+	},
 	MegaSlap = {
 		Id = 0,
 		Name = "Mega Slap",
@@ -52,7 +59,7 @@ Monetization.GamePasses = {
 	},
 }
 
-Monetization.GamePassOrder = { "VIP", "AutoCollect", "ExtraSlots", "FastSteal", "MegaSlap" }
+Monetization.GamePassOrder = { "VIP", "AutoCollect", "ExtraSlots", "FastEvolve", "FastSteal", "MegaSlap" }
 
 -- Kind decides which store tab shows the product and which handler grants it.
 Monetization.Products = {
@@ -112,6 +119,14 @@ Monetization.Products = {
 		Duration = 300,
 		DisplayPrice = 39,
 	},
+	InstantEvolve = {
+		Id = 0,
+		Kind = "EvolveReady", -- bought from the "Ready now" prompt on one of your critters
+		Name = "Instant Evolution",
+		Description = "Your critter is instantly ready to evolve",
+		Icon = "🧬",
+		DisplayPrice = 39,
+	},
 	UnitEpic = {
 		Id = 0,
 		Kind = "Unit",
@@ -153,6 +168,7 @@ Monetization.ProductOrder = {
 	"CashHuge",
 	"ServerLuck",
 	"BaseLock",
+	"InstantEvolve",
 	"UnitEpic",
 	"UnitLegendary",
 	"UnitMythic",

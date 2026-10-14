@@ -15,6 +15,7 @@ local RunService = game:GetService("RunService")
 local TextChatService = game:GetService("TextChatService")
 
 local Shared = ReplicatedStorage.Shared
+local Format = require(Shared.Util.Format)
 local GameConfig = require(Shared.Config.GameConfig)
 local Remotes = require(Shared.Remotes)
 
@@ -28,12 +29,19 @@ local STEAL = GameConfig.Steal
 -- Prompts -------------------------------------------------------------------------
 
 local stealPrompts: { [ProximityPrompt]: boolean } = setmetatable({}, { __mode = "k" }) :: any
+local evolvePrompts: { [ProximityPrompt]: boolean } = setmetatable({}, { __mode = "k" }) :: any
 
 local function applyPrompt(prompt: ProximityPrompt)
 	local kind = prompt:GetAttribute("Kind")
 	local ownerId = prompt:GetAttribute("OwnerUserId")
 	if kind == "Sell" or kind == "Lock" then
 		prompt.Enabled = ownerId == player.UserId
+	elseif kind == "Evolve" or kind == "EvolveRobux" then
+		-- "Evolve" once the critter is ready, "Ready now (Robux)" while it is still growing.
+		local evolveAt = prompt:GetAttribute("EvolveAt")
+		local ready = evolveAt ~= nil and workspace:GetServerTimeNow() >= evolveAt
+		local wanted = if kind == "Evolve" then ready else evolveAt ~= nil and not ready
+		prompt.Enabled = ownerId == player.UserId and wanted
 	elseif kind == "Steal" then
 		prompt.Enabled = ownerId ~= player.UserId
 		prompt.HoldDuration = if player:GetAttribute("Pass_FastSteal") then STEAL.FastStealHoldDuration else STEAL.HoldDuration
@@ -45,8 +53,14 @@ local function registerPrompt(prompt: Instance)
 		return
 	end
 	applyPrompt(prompt)
-	if prompt:GetAttribute("Kind") == "Steal" then
+	local kind = prompt:GetAttribute("Kind")
+	if kind == "Steal" then
 		stealPrompts[prompt] = true
+	elseif kind == "Evolve" or kind == "EvolveRobux" then
+		evolvePrompts[prompt] = true
+		prompt:GetAttributeChangedSignal("EvolveAt"):Connect(function()
+			applyPrompt(prompt)
+		end)
 	end
 	prompt:GetAttributeChangedSignal("OwnerUserId"):Connect(function()
 		applyPrompt(prompt)
@@ -65,6 +79,35 @@ local function setupPrompts()
 			end
 		end
 	end)
+end
+
+-- Evolution timers ------------------------------------------------------------------
+
+-- Updates the "EvolveTimer" line of every critter billboard and the evolve prompts.
+local function updateEvolution()
+	local now = workspace:GetServerTimeNow()
+	for prompt in evolvePrompts do
+		if prompt.Parent then
+			applyPrompt(prompt)
+		end
+	end
+	for _, model in CollectionService:GetTagged("Critter") do
+		local evolveAt = model:GetAttribute("EvolveAt")
+		local root = model:FindFirstChild("HumanoidRootPart")
+		local info = root and root:FindFirstChild("Info")
+		local label = info and info:FindFirstChild("EvolveTimer") :: TextLabel?
+		if label and evolveAt then
+			local target = model:GetAttribute("EvolveTarget") or "?"
+			local remaining = evolveAt - now
+			if remaining > 0 then
+				label.Text = `🧬 {target} in {Format.Time(remaining)}`
+				label.TextColor3 = Color3.fromRGB(150, 220, 255)
+			else
+				label.Text = `🧬 READY TO EVOLVE!`
+				label.TextColor3 = Color3.fromRGB(255, 220, 80)
+			end
+		end
+	end
 end
 
 -- Barriers ------------------------------------------------------------------------
@@ -318,6 +361,12 @@ function WorldController.Start()
 		while true do
 			updateBarriers()
 			task.wait(0.1)
+		end
+	end)
+	task.spawn(function()
+		while true do
+			updateEvolution()
+			task.wait(0.5)
 		end
 	end)
 end

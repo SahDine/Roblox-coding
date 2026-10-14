@@ -4,8 +4,11 @@
 	selling, storage overflow, offline earnings and the hand-off with
 	StealService (carry / return / transfer).
 
-	Saved data (DataService): data.Units[guid] = { Name, Mutation, Slot, Stored }
-	Runtime only:             states[player].Units[guid] = { Model, State, Token, Prompts }
+	Also handles evolution: placed critters gain 1 XP per second (2 with the Fast Evolution pass);
+	once ready, the owner evolves them for cash (or makes them ready instantly with Robux).
+
+	Saved data (DataService): data.Units[guid] = { Name, Mutation, Slot, Stored, Xp }
+	Runtime only:             states[player].Units[guid] = { Model, State, Token, Prompts, ReadyNotified }
 	State is "Walking" (going to its pedestal), "Placed" (earning) or "Carried" (being stolen).
 ]]
 
@@ -15,6 +18,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Shared = ReplicatedStorage.Shared
 local Economy = require(Shared.Economy)
+local Rarities = require(Shared.Config.Rarities)
 local Format = require(Shared.Util.Format)
 local GameConfig = require(Shared.Config.GameConfig)
 local Mutations = require(Shared.Config.Mutations)
@@ -33,6 +37,7 @@ type Runtime = {
 	State: string,
 	Token: Walker.Token?,
 	Prompts: { ProximityPrompt },
+	ReadyNotified: boolean?,
 }
 
 type PlayerState = {
@@ -46,6 +51,8 @@ local GRID_SIZE = 16
 local DataService, PlotService, CurrencyService, MonetizationService, StealService
 
 local states: { [Player]: PlayerState } = {}
+local pendingEvolve: { [Player]: { Guid: string, Time: number } } = {}
+local grantInstantEvolve: (Player) -> boolean
 
 -- Helpers ---------------------------------------------------------------------
 
@@ -84,6 +91,38 @@ local function clearPrompts(runtime: Runtime)
 	table.clear(runtime.Prompts)
 end
 
+local function getXpRate(player: Player): number
+	if MonetizationService.OwnsPass(player, "FastEvolve") then
+		return GameConfig.Evolution.FastEvolveMultiplier
+	end
+	return 1
+end
+
+-- Publishes when the critter will be able to evolve (server time) for the client timers and prompts.
+local function refreshEvolveInfo(player: Player, guid: string)
+	local state = states[player]
+	local data = DataService.Get(player)
+	local runtime = state and state.Units[guid]
+	local unit = data and data.Units[guid]
+	local model = runtime and runtime.Model
+	if not (runtime and unit and model) then
+		return
+	end
+	local need = Economy.GetEvolveTime(unit.Name)
+	local evolveAt = nil
+	if need then
+		local remaining = math.max(0, need - (unit.Xp or 0))
+		evolveAt = workspace:GetServerTimeNow() + remaining / getXpRate(player)
+	end
+	model:SetAttribute("EvolveAt", evolveAt)
+	model:SetAttribute("EvolveTarget", Economy.GetEvolutionTarget(unit.Name))
+	for _, prompt in runtime.Prompts do
+		if prompt.Parent then
+			prompt:SetAttribute("EvolveAt", evolveAt)
+		end
+	end
+end
+
 local function refreshAttributes(player: Player)
 	local data = DataService.Get(player)
 	local state = states[player]
@@ -115,6 +154,8 @@ local function createPrompts(player: Player, guid: string, runtime: Runtime, uni
 	sell.HoldDuration = 1
 	sell.MaxActivationDistance = 10
 	sell.RequiresLineOfSight = false
+	sell.KeyboardKeyCode = Enum.KeyCode.X
+	sell.GamepadKeyCode = Enum.KeyCode.ButtonB
 	sell:SetAttribute("Kind", "Sell")
 	sell:SetAttribute("OwnerUserId", player.UserId)
 	sell.Triggered:Connect(function(who)
@@ -124,6 +165,50 @@ local function createPrompts(player: Player, guid: string, runtime: Runtime, uni
 	end)
 	sell.Parent = root
 	table.insert(runtime.Prompts, sell)
+
+	local target = Economy.GetEvolutionTarget(unit.Name)
+	if target then
+		local evolve = Instance.new("ProximityPrompt")
+		evolve.Name = "EvolvePrompt"
+		evolve.ActionText = "Evolve " .. Format.Money(Economy.GetEvolveCost(unit.Name, unit.Mutation) or 0)
+		evolve.ObjectText = `🧬 {unit.Name} → {target}`
+		evolve.HoldDuration = 0.5
+		evolve.MaxActivationDistance = 10
+		evolve.RequiresLineOfSight = false
+		evolve.KeyboardKeyCode = Enum.KeyCode.E
+		evolve.GamepadKeyCode = Enum.KeyCode.ButtonX
+		evolve:SetAttribute("Kind", "Evolve")
+		evolve:SetAttribute("OwnerUserId", player.UserId)
+		evolve.Triggered:Connect(function(who)
+			if who == player then
+				UnitService.Evolve(player, guid, false)
+			end
+		end)
+		evolve.Parent = root
+		table.insert(runtime.Prompts, evolve)
+
+		if MonetizationService.IsProductConfigured("InstantEvolve") then
+			local instant = Instance.new("ProximityPrompt")
+			instant.Name = "EvolveRobuxPrompt"
+			instant.ActionText = `Ready now R$ {MonetizationService.GetRobuxPrice("InstantEvolve")}`
+			instant.ObjectText = `🧬 {unit.Name}`
+			instant.HoldDuration = 0
+			instant.MaxActivationDistance = 10
+			instant.RequiresLineOfSight = false
+			instant.KeyboardKeyCode = Enum.KeyCode.F
+			instant.GamepadKeyCode = Enum.KeyCode.ButtonY
+			instant:SetAttribute("Kind", "EvolveRobux")
+			instant:SetAttribute("OwnerUserId", player.UserId)
+			instant.Triggered:Connect(function(who)
+				if who == player then
+					pendingEvolve[player] = { Guid = guid, Time = os.clock() }
+					MonetizationService.PromptProduct(player, "InstantEvolve")
+				end
+			end)
+			instant.Parent = root
+			table.insert(runtime.Prompts, instant)
+		end
+	end
 
 	if GameConfig.Steal.Enabled then
 		local steal = Instance.new("ProximityPrompt")
@@ -177,11 +262,12 @@ local function placeModel(player: Player, guid: string)
 	model:PivotTo(UnitModelBuilder.GetStandingCFrame(model, slot.StandPosition, plot.CFrame.LookVector))
 	model:SetAttribute("OwnerUserId", player.UserId)
 	model:SetAttribute("Guid", guid)
-	UnitModelBuilder.CreateInfoBillboard(model, unit.Name, unit.Mutation)
+	UnitModelBuilder.CreateInfoBillboard(model, unit.Name, unit.Mutation, nil, nil, true)
 	model.Parent = plot.Model
 
 	runtime.State = "Placed"
 	createPrompts(player, guid, runtime, unit)
+	refreshEvolveInfo(player, guid)
 	PlotService.SetPadAmount(plot, unit.Slot, unit.Stored)
 end
 
@@ -317,9 +403,15 @@ end
 	Gives a critter to a player.
 	options.Model: reuse an existing model (conveyor critter, stolen critter).
 	options.Walk: the model walks to its pedestal instead of appearing on it.
+	options.Xp: evolution progress to keep (stolen critters keep their XP).
 	Returns the new guid, or nil when the base was full (the critter goes to storage).
 ]]
-function UnitService.GrantUnit(player: Player, unitName: string, mutation: string?, options: { Model: Model?, Walk: boolean?, Silent: boolean? }?): string?
+function UnitService.GrantUnit(
+	player: Player,
+	unitName: string,
+	mutation: string?,
+	options: { Model: Model?, Walk: boolean?, Xp: number? }?
+): string?
 	local opts = options or {}
 	local data = DataService.Get(player)
 	local state = states[player]
@@ -334,7 +426,7 @@ function UnitService.GrantUnit(player: Player, unitName: string, mutation: strin
 
 	local slotIndex = UnitService.FindFreeSlot(player)
 	if not slotIndex then
-		table.insert(data.Storage, { Name = unitName, Mutation = resolvedMutation })
+		table.insert(data.Storage, { Name = unitName, Mutation = resolvedMutation, Xp = opts.Xp })
 		if opts.Model then
 			opts.Model:Destroy()
 		end
@@ -344,7 +436,7 @@ function UnitService.GrantUnit(player: Player, unitName: string, mutation: strin
 	end
 
 	local guid = HttpService:GenerateGUID(false)
-	data.Units[guid] = { Name = unitName, Mutation = resolvedMutation, Slot = slotIndex, Stored = 0 }
+	data.Units[guid] = { Name = unitName, Mutation = resolvedMutation, Slot = slotIndex, Stored = 0, Xp = opts.Xp or 0 }
 	local runtime: Runtime = { Guid = guid, Model = opts.Model, State = "Walking", Prompts = {} }
 	state.Units[guid] = runtime
 
@@ -366,7 +458,7 @@ function UnitService.PlaceFromStorage(player: Player)
 	while #data.Storage > 0 and UnitService.HasFreeSlot(player) do
 		local entry = table.remove(data.Storage, 1)
 		if entry and Units.ByName[entry.Name] then
-			UnitService.GrantUnit(player, entry.Name, entry.Mutation)
+			UnitService.GrantUnit(player, entry.Name, entry.Mutation, { Xp = tonumber(entry.Xp) })
 		end
 	end
 	refreshAttributes(player)
@@ -423,6 +515,134 @@ function UnitService.CollectAll(player: Player)
 	for _, unit in data.Units do
 		UnitService.Collect(player, unit.Slot)
 	end
+end
+
+-- Evolution ---------------------------------------------------------------------
+
+local function playEvolveEffect(position: Vector3, color: Color3)
+	local burst = Instance.new("Part")
+	burst.Name = "EvolveBurst"
+	burst.Anchored = true
+	burst.CanCollide = false
+	burst.CanQuery = false
+	burst.CanTouch = false
+	burst.Transparency = 1
+	burst.Size = Vector3.new(1, 1, 1)
+	burst.CFrame = CFrame.new(position)
+	local sparkles = Instance.new("ParticleEmitter")
+	sparkles.Color = ColorSequence.new(Color3.new(1, 1, 1), color)
+	sparkles.LightEmission = 1
+	sparkles.Rate = 150
+	sparkles.Lifetime = NumberRange.new(0.6, 1.2)
+	sparkles.Speed = NumberRange.new(6, 12)
+	sparkles.SpreadAngle = Vector2.new(180, 180)
+	sparkles.Size = NumberSequence.new(0.6, 0)
+	sparkles.Parent = burst
+	local light = Instance.new("PointLight")
+	light.Color = color
+	light.Range = 20
+	light.Brightness = 4
+	light.Parent = burst
+	burst.Parent = workspace
+	task.delay(0.4, function()
+		sparkles.Enabled = false
+	end)
+	task.delay(1.6, burst.Destroy, burst)
+end
+
+-- Evolves a placed critter. `free` skips the XP and cash requirements (admin tools / events).
+function UnitService.Evolve(player: Player, guid: string, free: boolean?): boolean
+	local data = DataService.Get(player)
+	local state = states[player]
+	local plot = PlotService.GetPlot(player)
+	local unit = data and data.Units[guid]
+	local runtime = state and state.Units[guid]
+	if not (unit and runtime and plot and runtime.State == "Placed") then
+		return false
+	end
+	local target = Economy.GetEvolutionTarget(unit.Name)
+	local need = Economy.GetEvolveTime(unit.Name)
+	if not target or not need then
+		return false
+	end
+	if not free then
+		if unit.Xp < need then
+			local remaining = (need - unit.Xp) / getXpRate(player)
+			Notifier.Send(player, `🧬 {unit.Name} needs {Format.Time(remaining)} more before evolving`, "error")
+			return false
+		end
+		local cost = Economy.GetEvolveCost(unit.Name, unit.Mutation) or 0
+		if not CurrencyService.TrySpend(player, cost) then
+			Notifier.Send(player, `Not enough cash! Evolving costs {Format.Money(cost)}`, "error")
+			return false
+		end
+	end
+
+	local previous = unit.Name
+	unit.Name = target
+	unit.Xp = 0
+	runtime.ReadyNotified = false
+	clearPrompts(runtime)
+	if runtime.Model then
+		runtime.Model:Destroy()
+		runtime.Model = nil
+	end
+	placeModel(player, guid)
+
+	local targetDef = Units.ByName[target]
+	local slot = plot.Slots[unit.Slot]
+	if slot and targetDef then
+		playEvolveEffect(slot.StandPosition + Vector3.new(0, 3, 0), Rarities.Info[targetDef.Rarity].Color)
+	end
+	Notifier.Send(player, `🧬 Your {previous} evolved into {target}!`, "success")
+	if targetDef and Rarities.IsAtLeast(targetDef.Rarity, GameConfig.Evolution.AnnounceFromRarity) then
+		Notifier.All(`🧬 {player.DisplayName}'s {previous} evolved into a {targetDef.Rarity} {target}!`, "announce")
+	end
+	refreshAttributes(player)
+	task.spawn(DataService.SaveAsync, player)
+	return true
+end
+
+-- Robux "Instant Evolution": the critter the player clicked becomes ready to evolve.
+-- Must not yield (called from ProcessReceipt).
+grantInstantEvolve = function(player: Player): boolean
+	local data = DataService.Get(player)
+	local state = states[player]
+	if not (data and state) then
+		return false
+	end
+
+	local pending = pendingEvolve[player]
+	pendingEvolve[player] = nil
+	local chosen: string? = nil
+	if pending and os.clock() - pending.Time < 300 then
+		local unit = data.Units[pending.Guid]
+		local need = unit and Economy.GetEvolveTime(unit.Name)
+		if need and unit.Xp < need then
+			chosen = pending.Guid
+		end
+	end
+	if not chosen then
+		-- The clicked critter is gone (sold / stolen): help the critter that needs the most time.
+		local best = 0
+		for guid, unit in data.Units do
+			local need = Economy.GetEvolveTime(unit.Name)
+			if need and need - unit.Xp > best then
+				best = need - unit.Xp
+				chosen = guid
+			end
+		end
+	end
+	if not chosen then
+		Notifier.Send(player, "No critter can evolve right now, your purchase will be retried later.", "error")
+		return false
+	end
+
+	local unit = data.Units[chosen]
+	unit.Xp = Economy.GetEvolveTime(unit.Name) or unit.Xp
+	refreshEvolveInfo(player, chosen)
+	Notifier.Send(player, `🧬 {unit.Name} is ready to evolve! Press E on it.`, "success")
+	return true
 end
 
 -- Stealing hand-off -------------------------------------------------------------
@@ -483,7 +703,7 @@ function UnitService.TransferUnit(owner: Player, guid: string, thief: Player): b
 	UnitService.PlaceFromStorage(owner)
 	refreshAttributes(owner)
 
-	UnitService.GrantUnit(thief, unit.Name, unit.Mutation, { Model = model })
+	UnitService.GrantUnit(thief, unit.Name, unit.Mutation, { Model = model, Xp = unit.Xp })
 	return true
 end
 
@@ -509,6 +729,7 @@ local function sanitize(player: Player, data)
 		else
 			unit.Mutation = if Mutations.Info[unit.Mutation] then unit.Mutation else "None"
 			unit.Stored = if type(unit.Stored) == "number" and unit.Stored == unit.Stored then unit.Stored else 0
+			unit.Xp = if type(unit.Xp) == "number" and unit.Xp == unit.Xp then math.max(0, unit.Xp) else 0
 			if type(unit.Slot) ~= "number" or unit.Slot < 1 or unit.Slot > maxSlots or used[unit.Slot] then
 				table.insert(needSlot, guid)
 			else
@@ -531,7 +752,7 @@ local function sanitize(player: Player, data)
 			used[freeSlot] = true
 		else
 			data.Units[guid] = nil
-			table.insert(data.Storage, { Name = unit.Name, Mutation = unit.Mutation })
+			table.insert(data.Storage, { Name = unit.Name, Mutation = unit.Mutation, Xp = unit.Xp })
 		end
 	end
 end
@@ -587,6 +808,7 @@ function UnitService.OnPlayerLoaded(player: Player, data)
 end
 
 function UnitService.OnPlayerRemoving(player: Player)
+	pendingEvolve[player] = nil
 	local state = states[player]
 	if not state then
 		return
@@ -630,22 +852,44 @@ function UnitService.Start()
 			UnitService.RefreshSlots(player)
 		elseif passKey == "AutoCollect" then
 			UnitService.CollectAll(player)
+		elseif passKey == "FastEvolve" then
+			local state = states[player]
+			if state then
+				for guid in state.Units do
+					refreshEvolveInfo(player, guid)
+				end
+			end
 		end
+	end)
+
+	MonetizationService.RegisterKindHandler("EvolveReady", function(player)
+		return grantInstantEvolve(player)
 	end)
 
 	-- Income tick.
 	task.spawn(function()
 		while true do
-			task.wait(1)
+			local dt = task.wait(1)
 			for player, state in states do
 				local data = DataService.Get(player)
 				local plot = PlotService.GetPlot(player)
 				if data and plot then
 					local autoCollect = MonetizationService.OwnsPass(player, "AutoCollect")
+					local xpRate = getXpRate(player)
 					local earned = 0
 					for guid, unit in data.Units do
 						local runtime = state.Units[guid]
 						if runtime and runtime.State == "Placed" then
+							local need = Economy.GetEvolveTime(unit.Name)
+							unit.Xp = unit.Xp or 0
+							if need and unit.Xp < need then
+								unit.Xp = math.min(need, unit.Xp + xpRate * dt)
+								if unit.Xp >= need and not runtime.ReadyNotified then
+									runtime.ReadyNotified = true
+									refreshEvolveInfo(player, guid) -- the client timer may have drifted
+									Notifier.Send(player, `🧬 Your {unit.Name} is ready to evolve!`, "info")
+								end
+							end
 							local income = Economy.GetUnitIncome(unit.Name, unit.Mutation) * state.Multiplier
 							if autoCollect then
 								earned += income

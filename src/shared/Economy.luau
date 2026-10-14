@@ -53,6 +53,30 @@ function Economy.GetCashPackAmount(product, incomePerSecond: number): number
 	return math.max(product.BaseAmount or 0, math.floor(incomePerSecond * (product.IncomeSeconds or 0)))
 end
 
+-- Evolution ---------------------------------------------------------------------------------
+
+function Economy.GetEvolutionTarget(unitName: string): string?
+	local def = Units.ByName[unitName]
+	return def and def.EvolvesTo
+end
+
+-- Seconds of XP needed before the critter can evolve (nil when it has no next form).
+function Economy.GetEvolveTime(unitName: string): number?
+	local target = Units.ByName[Economy.GetEvolutionTarget(unitName) or ""]
+	if not target then
+		return nil
+	end
+	return GameConfig.Evolution.TimeByRarity[target.Rarity] or 600
+end
+
+function Economy.GetEvolveCost(unitName: string, mutation: string?): number?
+	local target = Economy.GetEvolutionTarget(unitName)
+	if not target then
+		return nil
+	end
+	return math.floor(Economy.GetUnitPrice(target, mutation) * GameConfig.Evolution.CostFraction)
+end
+
 -- day is 1-based and wraps around the reward list.
 function Economy.GetDailyReward(day: number, incomePerSecond: number): (number, string?)
 	local rewards = GameConfig.Daily.Rewards
