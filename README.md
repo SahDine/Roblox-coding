@@ -17,10 +17,11 @@ Un jeu Roblox **complet** du genre « steal & defend tycoon » — le genre qui 
 
 | Système | Détails |
 |---|---|
-| Créatures | 24 créatures, 7 raretés (Common → **Secret**), modèles 3D générés en code, animation de dandinement |
+| Créatures | 24 créatures inspirées des monstres de poche classiques (noms et modèles originaux), 7 raretés (Common → **Secret**), sculptées en code avec visages expressifs, flammes, ailes, auras ; animation de dandinement / vol |
 | Mutations | Gold x2, Diamond x3, Rainbow x5 (couleurs animées), Galaxy x10 |
-| Tapis roulant | Apparition pondérée par rareté, annonces serveur pour les raretés Legendary+, achat au premier arrivé |
-| Bases | 8 bases (1 par joueur), grille 4×4 de piédestaux, dalles d'encaissement, panneau avec le nom du propriétaire |
+| Tapis roulant | Chemin enchanté entre deux portails magiques, une créature toutes les 6 s, ~100 s pour le traverser, annonces serveur pour les raretés Legendary+, achat au premier arrivé |
+| Bases | 8 petits châteaux (1 par joueur) : remparts, tours à dôme, drapeaux, torches, bouclier magique, grille 4×4 de piédestaux lumineux, dalles d'encaissement, panneau au nom du propriétaire |
+| Carte | Monde fantasy généré en terrain : prairie, place pavée, chemins, étangs, collines, champignons géants lumineux, cristaux, arbres magiques, îles flottantes avec cascades, lucioles, fontaine magique au spawn |
 | Vol | Prompt à maintenir, transport au-dessus de la tête, vitesse réduite, faisceau vers ta base, délai max 60 s |
 | Défense | Verrou laser (le propriétaire passe, les autres sont bloqués), gant de gifle avec recul |
 | Progression | Renaissances, emplacements débloquables, gains hors-ligne (25 % pendant 3 h max) |
@@ -129,14 +130,17 @@ Tout se règle sans toucher au code des systèmes :
 | Fichier | Contenu |
 |---|---|
 | [`GameConfig.luau`](src/shared/Config/GameConfig.luau) | Argent de départ, vitesse du tapis, coût des renaissances, vol, verrou, gifle, daily, **codes promo** |
-| [`Units.luau`](src/shared/Config/Units.luau) | Les créatures : prix, revenus, couleurs, accessoires |
+| [`Units.luau`](src/shared/Config/Units.luau) | Les créatures : prix, revenus, couleurs |
+| [`CritterDesigns.luau`](src/server/Modules/CritterDesigns.luau) | La forme 3D de chaque créature |
 | [`Rarities.luau`](src/shared/Config/Rarities.luau) | Probabilités d'apparition et effets par rareté |
 | [`Mutations.luau`](src/shared/Config/Mutations.luau) | Chances et multiplicateurs des mutations |
 | [`Monetization.luau`](src/shared/Config/Monetization.luau) | IDs et contenu des passes / produits |
 
-Équilibrage actuel : une créature est rentabilisée en 25 s (Common) à 200 s (Secret). Avec la chance normale, une Secret apparaît en moyenne toutes les ~60 min (30 min avec le boost x2).
+Équilibrage actuel : une créature est rentabilisée en 25 s (Common) à 200 s (Secret). Avec la chance normale, une Legendary apparaît toutes les ~3 min, une Mythic toutes les ~12 min et une Secret toutes les ~70 min (deux fois plus souvent avec le boost x2).
 
-Pour ajouter une créature, ajoute une ligne dans `Units.luau` (accessoires disponibles : `Ears`, `Horns`, `Antenna`, `Spikes`, `Wings`, `Crown`, `TopHat`, `Halo`, `Tail`, `Shell`, `Beak`, `Fin`).
+Pour ajouter une créature : ajoute une ligne dans `Units.luau`, puis (optionnel) sculpte-la dans `CritterDesigns.luau` avec les outils de `CritterBuilder` (ellipsoïdes, membres, yeux, joues, flammes, particules…). Sans design dédié, elle utilise un modèle générique.
+
+Les créatures ont des noms originaux : utiliser les vrais noms ou les designs exacts d'une licence (Pokémon…) dans un jeu monétisé expose à une suppression pour violation de droits d'auteur. Si tu renommes une créature, ajoute l'ancien nom dans `Units.Aliases` pour que les sauvegardes des joueurs soient converties.
 
 ### Modèles personnalisés
 
@@ -157,7 +161,8 @@ src/
 │   ├── Main.server.luau    démarrage + cycle de vie joueur (ordre garanti)
 │   ├── Services/           Data, Map, Plot, Unit, Conveyor, Steal, Combat,
 │   │                       Monetization, Boost, Currency, Rebirth, Reward
-│   └── Modules/            UnitModelBuilder, Walker, Notifier
+│   └── Modules/            CritterBuilder + CritterDesigns (modèles), UnitModelBuilder,
+│                           Decor (accessoires fantasy), Walker, Notifier
 └── client/                 → StarterPlayerScripts.Client
     ├── Main.client.luau
     ├── Controllers/        HUD, Store, Rebirth, Daily, Codes, Notifications, World

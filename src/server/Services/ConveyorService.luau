@@ -171,7 +171,8 @@ local function spawnCritter(unitName: string, mutation: string)
 	end
 
 	task.spawn(function()
-		local result = Walker.Walk(humanoid, { MapService.ConveyorEnd }, entry.Token, 120)
+		local travelTime = (MapService.ConveyorEnd - MapService.ConveyorStart).Magnitude / CONVEYOR.WalkSpeed
+		local result = Walker.Walk(humanoid, { MapService.ConveyorEnd }, entry.Token, travelTime * 1.5 + 20)
 		if result ~= "Cancelled" and not entry.Sold then
 			removeEntry(entry)
 			model:Destroy()

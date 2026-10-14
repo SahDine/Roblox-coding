@@ -27,7 +27,7 @@ Rarities.Info = {
 	},
 	Epic = {
 		Color = Color3.fromRGB(180, 90, 255),
-		Weight = 5.5,
+		Weight = 8,
 		Scale = 1.2,
 		LuckAffected = true,
 		Glow = true,
@@ -35,7 +35,7 @@ Rarities.Info = {
 	},
 	Legendary = {
 		Color = Color3.fromRGB(255, 190, 40),
-		Weight = 1.8,
+		Weight = 3,
 		Scale = 1.35,
 		LuckAffected = true,
 		Glow = true,
@@ -45,7 +45,7 @@ Rarities.Info = {
 	},
 	Mythic = {
 		Color = Color3.fromRGB(255, 70, 110),
-		Weight = 0.55,
+		Weight = 0.9,
 		Scale = 1.5,
 		LuckAffected = true,
 		Glow = true,
@@ -55,7 +55,7 @@ Rarities.Info = {
 	},
 	Secret = {
 		Color = Color3.fromRGB(30, 255, 200),
-		Weight = 0.08,
+		Weight = 0.15,
 		Scale = 1.65,
 		LuckAffected = true,
 		Glow = true,

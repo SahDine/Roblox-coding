@@ -213,7 +213,7 @@ local function walkToSlot(player: Player, guid: string, runtime: Runtime, model:
 	table.insert(path, plot.Slots[unit.Slot].GroundPosition)
 
 	task.spawn(function()
-		local result = Walker.Walk(humanoid, path, token, 40)
+		local result = Walker.Walk(humanoid, path, token, 120)
 		if result == "Cancelled" then
 			return
 		end
@@ -494,7 +494,16 @@ local function sanitize(player: Player, data)
 	local used = {}
 	local needSlot = {}
 
+	for _, entry in data.Storage do
+		if type(entry) == "table" and type(entry.Name) == "string" then
+			entry.Name = Units.Resolve(entry.Name)
+		end
+	end
+
 	for guid, unit in data.Units do
+		if type(unit) == "table" and type(unit.Name) == "string" then
+			unit.Name = Units.Resolve(unit.Name)
+		end
 		if type(unit) ~= "table" or not Units.ByName[unit.Name] then
 			data.Units[guid] = nil
 		else

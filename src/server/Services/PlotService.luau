@@ -1,13 +1,14 @@
 --[[
 	PlotService
-	Builds the player bases, assigns one to each player, handles the base
-	lock (laser barrier) and teleports players home.
+	Builds the player bases (little fantasy castles), assigns one to each
+	player, handles the base lock (magic shield) and teleports players home.
 
 	Base layout (local space, -Z faces the conveyor):
-	  entrance + barrier at the front, a lock button inside,
-	  a 4x4 grid of pedestals, each with a cash pad in front of it.
+	  gate + shield at the front, a lock button inside,
+	  a 4x4 grid of pedestals, each with a cash pad in front of it,
+	  stone walls with merlons, four domed towers and banners.
 
-	The barrier's collision is handled on each client (owner walks through,
+	The shield's collision is handled on each client (owner walks through,
 	others are blocked), the server only refuses steals while locked.
 ]]
 
@@ -19,7 +20,9 @@ local GameConfig = require(Shared.Config.GameConfig)
 local Remotes = require(Shared.Remotes)
 local Signal = require(Shared.Util.Signal)
 
-local Notifier = require(script.Parent.Parent.Modules.Notifier)
+local Modules = script.Parent.Parent.Modules
+local Decor = require(Modules.Decor)
+local Notifier = require(Modules.Notifier)
 
 local PlotService = {}
 
@@ -29,6 +32,8 @@ PlotService.PadTouched = Signal.new()
 export type Slot = {
 	Index: number,
 	Pedestal: BasePart,
+	PedestalBase: BasePart,
+	Glow: BasePart,
 	Pad: BasePart,
 	PadLabel: TextLabel,
 	StandPosition: Vector3,
@@ -54,10 +59,15 @@ export type Plot = {
 local MAP = GameConfig.Map
 local WIDTH, DEPTH = MAP.PlotWidth, MAP.PlotDepth
 local FLOOR_TOP = 0.2
-local COLUMNS = { -18, -6, 6, 18 }
-local ROWS = { -10, 2, 14, 26 }
-local ENTRANCE_WIDTH = 14
-local WALL_HEIGHT = 8
+local COLUMNS = { -21, -7, 7, 21 }
+local ROWS = { -14, 1, 16, 31 }
+local ENTRANCE_WIDTH = 16
+local WALL_HEIGHT = 10
+local PEDESTAL_TOP = FLOOR_TOP + 1.3
+
+local STONE = Color3.fromRGB(175, 170, 180)
+local GRASS = Color3.fromRGB(120, 185, 95)
+local PATH = Color3.fromRGB(170, 160, 150)
 
 local PLOT_COLORS = {
 	Color3.fromRGB(255, 95, 95),
@@ -70,7 +80,7 @@ local PLOT_COLORS = {
 	Color3.fromRGB(255, 120, 200),
 }
 
-local MapService, StealService, MonetizationService
+local StealService, MonetizationService
 
 local plots: { Plot } = {}
 local plotByPlayer: { [Player]: Plot } = {}
@@ -95,8 +105,9 @@ local function makeText(parent: Instance, text: string, color: Color3, size: UDi
 end
 
 local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
-	local newPart = MapService.NewPart
 	local color = PLOT_COLORS[(index - 1) % #PLOT_COLORS + 1]
+	local stone = STONE:Lerp(color, 0.12)
+	local trimColor = color:Lerp(Color3.new(1, 1, 1), 0.15)
 
 	local model = Instance.new("Model")
 	model.Name = "Plot_" .. index
@@ -106,58 +117,138 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 
 	local function add(props, offset: CFrame): BasePart
 		props.CFrame = cframe * offset
-		local part = newPart(props, model)
-		part.CollisionGroup = "Decor"
-		return part
+		return Decor.Part(props, model)
+	end
+	local function world(x: number, y: number, z: number): Vector3
+		return (cframe * CFrame.new(x, y, z)).Position
 	end
 
+	-- Courtyard ---------------------------------------------------------------------------
 	local floor = add({
 		Name = "Floor",
 		Size = Vector3.new(WIDTH, FLOOR_TOP, DEPTH),
-		Color = color:Lerp(Color3.new(1, 1, 1), 0.7),
+		Color = GRASS,
+		Material = Enum.Material.Grass,
 	}, CFrame.new(0, FLOOR_TOP / 2, 0))
 	floor.CollisionGroup = "Default" -- critters walk on it
+	add({
+		Name = "Path",
+		Size = Vector3.new(6, 0.06, DEPTH - 2),
+		Color = PATH,
+		Material = Enum.Material.Cobblestone,
+		CanCollide = false,
+	}, CFrame.new(0, FLOOR_TOP + 0.03, 0))
+	add({
+		Name = "Plaza",
+		Size = Vector3.new(ENTRANCE_WIDTH + 14, 0.06, 14),
+		Color = PATH,
+		Material = Enum.Material.Cobblestone,
+		CanCollide = false,
+	}, CFrame.new(0, FLOOR_TOP + 0.03, -DEPTH / 2 + 8))
 
-	local wallColor = color:Lerp(Color3.new(0, 0, 0), 0.1)
+	-- Walls with a coloured trim and merlons ------------------------------------------------
 	local wallY = FLOOR_TOP + WALL_HEIGHT / 2
 	local sideWidth = (WIDTH - ENTRANCE_WIDTH) / 2
-	add({ Name = "WallBack", Size = Vector3.new(WIDTH, WALL_HEIGHT, 1), Color = wallColor }, CFrame.new(0, wallY, DEPTH / 2 - 0.5))
-	add({ Name = "WallLeft", Size = Vector3.new(1, WALL_HEIGHT, DEPTH), Color = wallColor }, CFrame.new(-WIDTH / 2 + 0.5, wallY, 0))
-	add({ Name = "WallRight", Size = Vector3.new(1, WALL_HEIGHT, DEPTH), Color = wallColor }, CFrame.new(WIDTH / 2 - 0.5, wallY, 0))
+	local walls = {
+		{ Vector3.new(WIDTH, 0, 0), Vector3.new(0, 0, DEPTH / 2 - 0.75) },
+		{ Vector3.new(0, 0, DEPTH), Vector3.new(-WIDTH / 2 + 0.75, 0, 0) },
+		{ Vector3.new(0, 0, DEPTH), Vector3.new(WIDTH / 2 - 0.75, 0, 0) },
+		{ Vector3.new(sideWidth, 0, 0), Vector3.new(-(ENTRANCE_WIDTH / 2 + sideWidth / 2), 0, -DEPTH / 2 + 0.75) },
+		{ Vector3.new(sideWidth, 0, 0), Vector3.new(ENTRANCE_WIDTH / 2 + sideWidth / 2, 0, -DEPTH / 2 + 0.75) },
+	}
+	for wallIndex, wall in walls do
+		local length = math.max(wall[1].X, wall[1].Z)
+		local alongX = wall[1].X > 0
+		local size = if alongX then Vector3.new(length, WALL_HEIGHT, 1.5) else Vector3.new(1.5, WALL_HEIGHT, length)
+		add({ Name = "Wall" .. wallIndex, Size = size, Color = stone, Material = Enum.Material.Cobblestone }, CFrame.new(wall[2] + Vector3.new(0, wallY, 0)))
+		add({
+			Name = "Trim",
+			Size = if alongX then Vector3.new(length, 0.7, 1.8) else Vector3.new(1.8, 0.7, length),
+			Color = trimColor,
+			Material = Enum.Material.SmoothPlastic,
+		}, CFrame.new(wall[2] + Vector3.new(0, FLOOR_TOP + WALL_HEIGHT + 0.35, 0)))
+		local count = math.floor(length / 5)
+		for merlon = 0, count - 1 do
+			local offset = (merlon - (count - 1) / 2) * 5
+			local position = wall[2] + (if alongX then Vector3.new(offset, 0, 0) else Vector3.new(0, 0, offset))
+			add({
+				Name = "Merlon",
+				Size = Vector3.new(2.2, 1.6, 1.6),
+				Color = stone,
+				Material = Enum.Material.Cobblestone,
+			}, CFrame.new(position + Vector3.new(0, FLOOR_TOP + WALL_HEIGHT + 1.5, 0)))
+		end
+	end
+
+	-- Corner towers with domes and banners ---------------------------------------------------
+	for _, corner in { Vector3.new(-1, 0, -1), Vector3.new(1, 0, -1), Vector3.new(-1, 0, 1), Vector3.new(1, 0, 1) } do
+		local base = world(corner.X * (WIDTH / 2 - 1), 0, corner.Z * (DEPTH / 2 - 1))
+		Decor.Column("Tower", WALL_HEIGHT + 6, 8, base, stone, model, { Material = Enum.Material.Cobblestone })
+		Decor.Column("TowerRing", 1, 9, base + Vector3.new(0, WALL_HEIGHT + 6, 0), trimColor, model)
+		Decor.Ellipsoid("Dome", Vector3.new(8.6, 8, 8.6), CFrame.new(base + Vector3.new(0, WALL_HEIGHT + 7, 0)), color, model, {
+			Material = Enum.Material.SmoothPlastic,
+		})
+		local spireTop = base + Vector3.new(0, WALL_HEIGHT + 15, 0)
+		Decor.Column("FlagPole", 5, 0.35, spireTop - Vector3.new(0, 4, 0), Color3.fromRGB(80, 70, 60), model, { CanCollide = false })
+		Decor.Part({
+			Name = "Flag",
+			Size = Vector3.new(0.15, 1.8, 3),
+			CFrame = CFrame.new(spireTop + Vector3.new(0, -0.3, 0)) * cframe.Rotation * CFrame.new(0, 0, 1.6),
+			Color = color,
+			CanCollide = false,
+		}, model)
+		if corner.Z < 0 then
+			local window = Decor.Part({
+				Name = "Window",
+				Size = Vector3.new(1.6, 2.4, 0.3),
+				CFrame = CFrame.new(base + Vector3.new(0, WALL_HEIGHT + 1, 0)) * cframe.Rotation * CFrame.new(0, 0, -4),
+				Color = Color3.fromRGB(255, 210, 120),
+				Material = Enum.Material.Neon,
+				CanCollide = false,
+			}, model)
+			Decor.Light(window, Color3.fromRGB(255, 200, 120), 10, 1)
+		end
+	end
+
+	-- Gate -------------------------------------------------------------------------------------
+	local gateZ = -DEPTH / 2 + 0.75
 	for _, side in { -1, 1 } do
 		add({
-			Name = "WallFront",
-			Size = Vector3.new(sideWidth, WALL_HEIGHT, 1),
-			Color = wallColor,
-		}, CFrame.new(side * (ENTRANCE_WIDTH / 2 + sideWidth / 2), wallY, -DEPTH / 2 + 0.5))
+			Name = "GatePillar",
+			Size = Vector3.new(3.5, WALL_HEIGHT + 5, 3.5),
+			Color = stone,
+			Material = Enum.Material.Cobblestone,
+		}, CFrame.new(side * (ENTRANCE_WIDTH / 2 + 1.75), FLOOR_TOP + (WALL_HEIGHT + 5) / 2, gateZ))
+		Decor.Torch(model, world(side * (ENTRANCE_WIDTH / 2 + 2), 0, gateZ - 3.5), 5)
 	end
 	add({
 		Name = "GateBeam",
-		Size = Vector3.new(ENTRANCE_WIDTH, 1.5, 1),
-		Color = wallColor,
-	}, CFrame.new(0, FLOOR_TOP + WALL_HEIGHT + 0.75, -DEPTH / 2 + 0.5))
+		Size = Vector3.new(ENTRANCE_WIDTH + 7, 2.2, 3.5),
+		Color = trimColor,
+	}, CFrame.new(0, FLOOR_TOP + WALL_HEIGHT + 3.9, gateZ))
 
-	-- Laser barrier (collision is client-side, see WorldController).
+	-- Magic shield (collision is client-side, see WorldController).
 	local barrier = add({
 		Name = "Barrier",
-		Size = Vector3.new(ENTRANCE_WIDTH, WALL_HEIGHT, 0.4),
-		Color = Color3.fromRGB(255, 50, 50),
-		Material = Enum.Material.Neon,
+		Size = Vector3.new(ENTRANCE_WIDTH, WALL_HEIGHT + 2.8, 0.5),
+		Color = Color3.fromRGB(255, 70, 90),
+		Material = Enum.Material.ForceField,
 		Transparency = 1,
 		CanCollide = false,
 		CanQuery = false,
 		CanTouch = false,
 		CastShadow = false,
-	}, CFrame.new(0, wallY, -DEPTH / 2 + 0.5))
+	}, CFrame.new(0, FLOOR_TOP + (WALL_HEIGHT + 2.8) / 2, gateZ))
 	barrier:SetAttribute("OwnerUserId", 0)
 	barrier:SetAttribute("Locked", false)
 
-	-- Sign above the entrance.
+	-- Sign above the gate.
 	local sign = add({
 		Name = "Sign",
 		Size = Vector3.new(26, 6, 0.6),
-		Color = Color3.fromRGB(35, 35, 45),
-	}, CFrame.new(0, FLOOR_TOP + WALL_HEIGHT + 4.5, -DEPTH / 2 + 0.5))
+		Color = Color3.fromRGB(45, 35, 55),
+		Material = Enum.Material.Wood,
+	}, CFrame.new(0, FLOOR_TOP + WALL_HEIGHT + 8.2, gateZ - 1.2))
 	local signGui = Instance.new("SurfaceGui")
 	signGui.Face = Enum.NormalId.Front
 	signGui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
@@ -167,13 +258,19 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 	local ownerLabel = makeText(signGui, "Empty Base", Color3.new(1, 1, 1), UDim2.fromScale(0.94, 0.58), UDim2.fromScale(0.03, 0.04))
 	local statusLabel = makeText(signGui, "", Color3.fromRGB(200, 200, 200), UDim2.fromScale(0.9, 0.32), UDim2.fromScale(0.05, 0.64))
 
-	-- Lock button.
+	-- Lock button (an enchanted rune stone).
+	add({
+		Name = "LockBase",
+		Size = Vector3.new(4.5, 0.6, 4.5),
+		Color = stone,
+		Material = Enum.Material.Cobblestone,
+	}, CFrame.new(-16, FLOOR_TOP + 0.3, -DEPTH / 2 + 8))
 	local lockButton = add({
 		Name = "LockButton",
-		Size = Vector3.new(3.5, 0.8, 3.5),
-		Color = Color3.fromRGB(230, 60, 60),
+		Size = Vector3.new(3.4, 0.7, 3.4),
+		Color = Color3.fromRGB(230, 60, 80),
 		Material = Enum.Material.Neon,
-	}, CFrame.new(-14, FLOOR_TOP + 0.4, -DEPTH / 2 + 7))
+	}, CFrame.new(-16, FLOOR_TOP + 0.95, -DEPTH / 2 + 8))
 	local lockGui = Instance.new("BillboardGui")
 	lockGui.Size = UDim2.fromScale(6, 2)
 	lockGui.StudsOffset = Vector3.new(0, 3, 0)
@@ -187,15 +284,33 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 	lockPrompt.ActionText = "Lock Base"
 	lockPrompt.ObjectText = `{GameConfig.Lock.Duration}s`
 	lockPrompt.HoldDuration = 0
-	lockPrompt.MaxActivationDistance = 9
+	lockPrompt.MaxActivationDistance = 10
 	lockPrompt.RequiresLineOfSight = false
 	lockPrompt:SetAttribute("Kind", "Lock")
 	lockPrompt:SetAttribute("OwnerUserId", 0)
 	lockPrompt.Parent = lockButton
 
+	-- Lanterns and a big banner on the back wall.
+	for _, position in { Vector3.new(-WIDTH / 2 + 5, 0, -DEPTH / 2 + 5), Vector3.new(WIDTH / 2 - 5, 0, -DEPTH / 2 + 5), Vector3.new(-WIDTH / 2 + 5, 0, DEPTH / 2 - 5), Vector3.new(WIDTH / 2 - 5, 0, DEPTH / 2 - 5) } do
+		Decor.Lantern(model, world(position.X, FLOOR_TOP, position.Z), color:Lerp(Color3.new(1, 1, 1), 0.4))
+	end
+	add({
+		Name = "Banner",
+		Size = Vector3.new(10, 8, 0.25),
+		Color = color,
+		CanCollide = false,
+	}, CFrame.new(0, FLOOR_TOP + WALL_HEIGHT - 4, DEPTH / 2 - 1.6))
+	add({
+		Name = "BannerEmblem",
+		Size = Vector3.new(3.5, 3.5, 0.3),
+		Color = Color3.fromRGB(255, 225, 120),
+		Material = Enum.Material.Neon,
+		CanCollide = false,
+	}, CFrame.new(0, FLOOR_TOP + WALL_HEIGHT - 3.6, DEPTH / 2 - 1.75) * CFrame.Angles(0, 0, math.rad(45)))
+
 	-- Spawn marker (also the target of the "go home" beam on the client).
-	local spawnCFrame = cframe * CFrame.new(0, FLOOR_TOP + 3, -DEPTH / 2 + 10)
-	local marker = newPart({
+	local spawnCFrame = cframe * CFrame.new(0, FLOOR_TOP + 3, -DEPTH / 2 + 11)
+	local marker = Decor.Part({
 		Name = "SpawnMarker",
 		Size = Vector3.new(1, 1, 1),
 		CFrame = spawnCFrame,
@@ -208,44 +323,59 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 	target.Name = "Target"
 	target.Parent = marker
 
-	-- Pedestals + cash pads.
+	-- Pedestals + cash pads ---------------------------------------------------------------------
 	local slots: { Slot } = {}
 	for row = 1, #ROWS do
 		for column = 1, #COLUMNS do
 			local slotIndex = (row - 1) * #COLUMNS + column
 			local x, z = COLUMNS[column], ROWS[row]
 
+			local pedestalBase = add({
+				Name = "PedestalBase" .. slotIndex,
+				Size = Vector3.new(7.6, 0.6, 7.6),
+				Color = stone,
+				Material = Enum.Material.Cobblestone,
+			}, CFrame.new(x, FLOOR_TOP + 0.3, z))
+			local glow = add({
+				Name = "PedestalGlow" .. slotIndex,
+				Size = Vector3.new(7, 0.18, 7),
+				Color = color,
+				Material = Enum.Material.Neon,
+				CastShadow = false,
+			}, CFrame.new(x, FLOOR_TOP + 0.69, z))
 			local pedestal = add({
 				Name = "Pedestal" .. slotIndex,
-				Size = Vector3.new(6, 1, 6),
-				Color = Color3.fromRGB(70, 70, 80),
-			}, CFrame.new(x, FLOOR_TOP + 0.5, z))
+				Size = Vector3.new(6.6, 0.55, 6.6),
+				Color = color:Lerp(Color3.new(1, 1, 1), 0.55),
+				Material = Enum.Material.Marble,
+			}, CFrame.new(x, PEDESTAL_TOP - 0.275, z))
 
 			local pad = add({
 				Name = "Pad" .. slotIndex,
-				Size = Vector3.new(4, 0.3, 2.5),
+				Size = Vector3.new(4.5, 0.3, 2.5),
 				Color = Color3.fromRGB(90, 90, 100),
 				Material = Enum.Material.Neon,
-			}, CFrame.new(x, FLOOR_TOP + 0.15, z - 4.5))
+			}, CFrame.new(x, FLOOR_TOP + 0.15, z - 5.6))
 			pad.CanTouch = true
 
 			local padGui = Instance.new("BillboardGui")
 			padGui.Size = UDim2.fromScale(5, 1.2)
 			padGui.StudsOffset = Vector3.new(0, 1.2, 0)
-			padGui.MaxDistance = 45
+			padGui.MaxDistance = 50
 			padGui.LightInfluence = 0
 			padGui.Parent = pad
 			local padLabel = makeText(padGui, "", Color3.fromRGB(120, 255, 120), UDim2.fromScale(1, 1), UDim2.new())
 
-			local slot: Slot = {
+			slots[slotIndex] = {
 				Index = slotIndex,
 				Pedestal = pedestal,
+				PedestalBase = pedestalBase,
+				Glow = glow,
 				Pad = pad,
 				PadLabel = padLabel,
-				StandPosition = (cframe * CFrame.new(x, FLOOR_TOP + 1, z)).Position,
-				GroundPosition = (cframe * CFrame.new(x, FLOOR_TOP, z - 4.5)).Position,
+				StandPosition = world(x, PEDESTAL_TOP, z),
+				GroundPosition = world(x, FLOOR_TOP, z - 5.6),
 			}
-			slots[slotIndex] = slot
 		end
 	end
 
@@ -337,8 +467,9 @@ end
 function PlotService.SetUnlockedSlots(plot: Plot, count: number)
 	for index, slot in plot.Slots do
 		local unlocked = index <= count
-		slot.Pedestal.Transparency = if unlocked then 0 else 0.75
-		slot.Pedestal.Color = if unlocked then Color3.fromRGB(70, 70, 80) else Color3.fromRGB(40, 40, 45)
+		slot.Pedestal.Transparency = if unlocked then 0 else 0.6
+		slot.PedestalBase.Transparency = if unlocked then 0 else 0.6
+		slot.Glow.Transparency = if unlocked then 0 else 1
 		slot.Pad.Transparency = if unlocked then 0 else 1
 		if not unlocked then
 			slot.PadLabel.Text = ""
@@ -365,7 +496,7 @@ function PlotService.RefreshLockVisuals(plot: Plot)
 	local barrier = plot.Barrier
 	if barrier:GetAttribute("Locked") ~= locked then
 		barrier:SetAttribute("Locked", locked)
-		barrier.Transparency = if locked then 0.45 else 1
+		barrier.Transparency = if locked then 0 else 1
 	end
 	if locked then
 		local remaining = Format.Time(plot.LockedUntil - now())
@@ -390,7 +521,6 @@ end
 -- Lifecycle -------------------------------------------------------------------
 
 function PlotService.Init(services)
-	MapService = services.MapService
 	StealService = services.StealService
 	MonetizationService = services.MonetizationService
 

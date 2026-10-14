@@ -26,12 +26,12 @@ GameConfig.Data = {
 
 GameConfig.Map = {
 	PlotCount = 8, -- Set "Max Players" to 8 in Game Settings so everybody gets a base.
-	PlotWidth = 60,
-	PlotDepth = 64,
-	PlotSpacing = 70,
-	PlotDistanceFromCenter = 48,
-	ConveyorLength = 300,
-	ConveyorWidth = 10,
+	PlotWidth = 72,
+	PlotDepth = 76,
+	PlotSpacing = 96, -- distance between two neighbouring bases (centre to centre)
+	PlotDistanceFromCenter = 86, -- distance from the conveyor to the centre of a base
+	ConveyorLength = 400,
+	ConveyorWidth = 12,
 }
 
 -- Base + MaxFromRebirths + FromExtraSlotsPass must stay <= 16 (4x4 pedestal grid).
@@ -56,10 +56,10 @@ GameConfig.Economy = {
 }
 
 GameConfig.Conveyor = {
-	SpawnInterval = 3,
-	WalkSpeed = 7,
-	MaxCritters = 18,
-	DeliverySpeed = 22, -- Walk speed of a bought critter heading to its new base.
+	SpawnInterval = 6, -- seconds between two critters
+	WalkSpeed = 4, -- studs per second on the conveyor (~100 s from one end to the other)
+	MaxCritters = 20,
+	DeliverySpeed = 10, -- walk speed of a bought critter heading to its new base
 }
 
 GameConfig.Steal = {
@@ -68,7 +68,7 @@ GameConfig.Steal = {
 	FastStealHoldDuration = 1,
 	CarryWalkSpeed = 14,
 	FastStealCarryWalkSpeed = 19,
-	CarryTimeout = 60,
+	CarryTimeout = 90,
 	Cooldown = 4,
 	AnnounceFromRarity = "Legendary", -- Server-wide message when this rarity or better is stolen.
 }
@@ -114,7 +114,7 @@ GameConfig.Daily = {
 -- Optional field: ExpiresAt = os.time() timestamp.
 GameConfig.Codes = {
 	RELEASE = { Cash = 1_000 },
-	CRITTERS = { Unit = "Disco Frog" },
+	CRITTERS = { Unit = "Coinpurr" },
 	LUCKY = { Cash = 5_000 },
 }
 

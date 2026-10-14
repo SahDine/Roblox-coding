@@ -104,7 +104,15 @@ end
 
 -- Critter animation -----------------------------------------------------------------
 
-type Animated = { Motor: Motor6D?, Root: BasePart?, Phase: number, Scale: number, Paint: { BasePart }, Rainbow: boolean }
+type Animated = {
+	Motor: Motor6D?,
+	Root: BasePart?,
+	Phase: number,
+	Scale: number,
+	Floats: boolean,
+	Paint: { BasePart },
+	Rainbow: boolean,
+}
 
 local animated: { [Model]: Animated } = {}
 
@@ -124,7 +132,8 @@ local function trackCritter(model: Instance)
 		Motor = motor,
 		Root = root,
 		Phase = math.random() * math.pi * 2,
-		Scale = if root then root.Size.Y / 2.6 else 1,
+		Scale = model:GetAttribute("Scale") or 1,
+		Floats = model:GetAttribute("Floats") == true,
 		Paint = paint,
 		Rainbow = model:GetAttribute("Mutation") == "Rainbow",
 	}
@@ -153,6 +162,10 @@ local function animateCritters()
 			if moving then
 				local step = math.sin(phase * 11)
 				info.Motor.Transform = CFrame.new(0, math.abs(step) * 0.45 * info.Scale, 0) * CFrame.Angles(0, 0, step * 0.15)
+			elseif info.Floats then
+				-- Flying critters drift up and down slowly.
+				info.Motor.Transform = CFrame.new(0, (math.sin(phase * 1.6) + 1) * 0.35 * info.Scale, 0)
+					* CFrame.Angles(math.sin(phase * 1.6) * 0.05, math.sin(phase * 0.8) * 0.15, 0)
 			else
 				info.Motor.Transform = CFrame.new(0, (math.sin(phase * 2.2) + 1) * 0.12 * info.Scale, 0)
 					* CFrame.Angles(0, math.sin(phase * 1.1) * 0.12, 0)
