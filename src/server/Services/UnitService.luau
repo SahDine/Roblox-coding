@@ -68,7 +68,8 @@ end
 
 local function computeMultiplier(player: Player, data): number
 	local economy = GameConfig.Economy
-	local multiplier = Economy.GetRebirthMultiplier(data.Rebirths)
+	-- Base upgrades boost every critter of the base (UpgradeService refreshes this on upgrade).
+	local multiplier = Economy.GetRebirthMultiplier(data.Rebirths) * Economy.GetBaseIncomeMultiplier(data.BaseLevel)
 	if MonetizationService.OwnsPass(player, "VIP") then
 		multiplier *= economy.VipMultiplier
 	end
@@ -363,6 +364,37 @@ end
 
 function UnitService.HasFreeSlot(player: Player): boolean
 	return UnitService.FindFreeSlot(player) ~= nil
+end
+
+--[[
+	True while one of the player's bought critters is walking from the conveyor to its pedestal
+	(players bring their critters home one at a time). Also returns that critter's name.
+	Critters being loaded or placed are "Walking" for an instant too, but only a real walk has a
+	live walk token (placeModel clears it, and the walk always ends: Walker deadline). A walker
+	whose model or humanoid vanished can never arrive, so it does not count either.
+]]
+function UnitService.HasCritterInTransit(player: Player): (boolean, string?)
+	local state = states[player]
+	local data = DataService.Get(player)
+	if not state then
+		return false, nil
+	end
+	for guid, runtime in state.Units do
+		local token = runtime.Token
+		local model = runtime.Model
+		if
+			runtime.State == "Walking"
+			and token
+			and not token.Cancelled
+			and model
+			and model.Parent
+			and model:FindFirstChildOfClass("Humanoid")
+		then
+			local unit = data and data.Units[guid]
+			return true, unit and unit.Name
+		end
+	end
+	return false, nil
 end
 
 -- Income per second of every owned critter, multipliers included.

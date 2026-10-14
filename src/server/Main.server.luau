@@ -23,12 +23,15 @@ local ORDER = {
 	"CombatService",
 	"RebirthService",
 	"RewardService",
+	"UpgradeService",
+	"LeaderboardService",
 }
 
 -- Order matters: plot before critters, critters before rewards.
 local LOAD_ORDER = {
 	"CurrencyService",
 	"PlotService",
+	"UpgradeService",
 	"UnitService",
 	"CombatService",
 	"RewardService",
@@ -42,6 +45,8 @@ local REMOVE_ORDER = {
 	"CombatService",
 	"RebirthService",
 	"RewardService",
+	"UpgradeService",
+	"LeaderboardService",
 	"PlotService",
 	"MonetizationService",
 }

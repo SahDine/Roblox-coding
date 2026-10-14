@@ -2,7 +2,11 @@
 	Rarities
 	Spawn weights on the conveyor, colours and Robux "instant buy" products.
 	Luck (server luck boost) multiplies the weight of every rarity with LuckAffected = true.
+	Rarities with a timer in GameConfig.RareSpawns (Legendary, Mythic, Secret) are never rolled:
+	ConveyorService spawns them on a public server-wide timer instead (their Weight is 0).
 ]]
+
+local GameConfig = require(script.Parent.GameConfig)
 
 local Rarities = {}
 
@@ -35,7 +39,7 @@ Rarities.Info = {
 	},
 	Legendary = {
 		Color = Color3.fromRGB(255, 190, 40),
-		Weight = 3,
+		Weight = 0, -- timed spawn (GameConfig.RareSpawns)
 		Scale = 1.35,
 		LuckAffected = true,
 		Glow = true,
@@ -45,7 +49,7 @@ Rarities.Info = {
 	},
 	Mythic = {
 		Color = Color3.fromRGB(255, 70, 110),
-		Weight = 0.9,
+		Weight = 0, -- timed spawn (GameConfig.RareSpawns)
 		Scale = 1.5,
 		LuckAffected = true,
 		Glow = true,
@@ -55,7 +59,7 @@ Rarities.Info = {
 	},
 	Secret = {
 		Color = Color3.fromRGB(30, 255, 200),
-		Weight = 0.15,
+		Weight = 0, -- timed spawn (GameConfig.RareSpawns)
 		Scale = 1.65,
 		LuckAffected = true,
 		Glow = true,
@@ -73,12 +77,18 @@ function Rarities.IsAtLeast(rarity: string, minimum: string): boolean
 	return Rarities.GetIndex(rarity) >= Rarities.GetIndex(minimum)
 end
 
+-- True when this rarity spawns on a server-wide timer instead of the random roll.
+function Rarities.IsTimed(rarity: string): boolean
+	return GameConfig.RareSpawns.Timers[rarity] ~= nil
+end
+
+-- Random rarity of a conveyor critter (timed rarities excluded).
 function Rarities.Roll(luck: number): string
 	local total = 0
 	local weights = {}
 	for index, name in Rarities.Order do
 		local info = Rarities.Info[name]
-		local weight = info.Weight
+		local weight = if Rarities.IsTimed(name) then 0 else info.Weight
 		if info.LuckAffected then
 			weight *= luck
 		end
@@ -88,9 +98,11 @@ function Rarities.Roll(luck: number): string
 
 	local roll = math.random() * total
 	for index, name in Rarities.Order do
-		roll -= weights[index]
-		if roll <= 0 then
-			return name
+		if weights[index] > 0 then
+			roll -= weights[index]
+			if roll <= 0 then
+				return name
+			end
 		end
 	end
 	return Rarities.Order[1]

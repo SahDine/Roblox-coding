@@ -77,6 +77,58 @@ function Economy.GetEvolveCost(unitName: string, mutation: string?): number?
 	return math.floor(Economy.GetUnitPrice(target, mutation) * GameConfig.Evolution.CostFraction)
 end
 
+-- Base upgrades -------------------------------------------------------------------------------
+
+export type BaseTier = { FromLevel: number, Name: string, Description: string, Color: Color3 }
+
+-- Any value (saved data, attribute, nil) -> a valid base level (1..MaxLevel).
+function Economy.SanitizeBaseLevel(level: any): number
+	if type(level) ~= "number" or level ~= level then
+		return 1
+	end
+	return math.clamp(math.floor(level), 1, GameConfig.BaseUpgrade.MaxLevel)
+end
+
+-- Price to go from `level` to the next one, nil at max level.
+function Economy.GetBaseUpgradeCost(level: number): number?
+	local upgrade = GameConfig.BaseUpgrade
+	local current = Economy.SanitizeBaseLevel(level)
+	if current >= upgrade.MaxLevel then
+		return nil
+	end
+	local costs = upgrade.Costs
+	-- Levels past the end of the list (MaxLevel raised without new costs) keep growing x4.
+	return costs[current] or costs[#costs] * 4 ^ (current - #costs)
+end
+
+-- Income multiplier of every critter of a base at this level (1 at level 1).
+function Economy.GetBaseIncomeMultiplier(level: any): number
+	return 1 + (Economy.SanitizeBaseLevel(level) - 1) * GameConfig.BaseUpgrade.IncomeBonusPerLevel
+end
+
+-- Income bonus in whole percents ("+30%"), avoids floating point noise in the UI.
+function Economy.GetBaseIncomeBonusPercent(level: any): number
+	return math.floor((Economy.GetBaseIncomeMultiplier(level) - 1) * 100 + 0.5)
+end
+
+-- Seconds the base lock lasts at this level.
+function Economy.GetLockDuration(level: any): number
+	return GameConfig.Lock.Duration + (Economy.SanitizeBaseLevel(level) - 1) * GameConfig.BaseUpgrade.LockBonusPerLevel
+end
+
+-- Index and definition of the castle tier (look) of a level.
+function Economy.GetBaseTier(level: any): (number, BaseTier)
+	local current = Economy.SanitizeBaseLevel(level)
+	local tiers = GameConfig.BaseUpgrade.Tiers
+	local index = 1
+	for tierIndex, tier in tiers do
+		if current >= tier.FromLevel then
+			index = tierIndex
+		end
+	end
+	return index, tiers[index]
+end
+
 -- day is 1-based and wraps around the reward list.
 function Economy.GetDailyReward(day: number, incomePerSecond: number): (number, string?)
 	local rewards = GameConfig.Daily.Rewards

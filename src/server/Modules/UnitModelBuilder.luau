@@ -3,11 +3,13 @@
 	Builds critter models: the sculpted design from CritterDesigns, or
 	ReplicatedStorage.Assets.Critters[<name>] if you made a custom model.
 
-	Rig layout:
+	Rig layout (see CritterBuilder.Finish):
 		HumanoidRootPart (invisible, root)
-		  └─ Motor6D "Bounce" -> Body (the client animates this motor for a cute waddle)
-		Every other part is welded to Body.
+		  └─ Motor6D "Bounce" -> Core (invisible body centre, the body parts are welded to it)
+		       └─ one Motor6D per bone (legs, arms, head, tail, wings...) animated by the client
 		Humanoid (HipHeight computed so the feet touch the ground).
+
+	Each design is built once per critter name and cached; every critter in the game is a clone.
 
 	Model attributes: StandOffset (height of the root above the ground), Scale, Height, Floats.
 ]]
@@ -108,11 +110,22 @@ local function buildDesigned(def: Units.UnitDef): Model
 		Belly = def.Belly or def.Body:Lerp(WHITE, 0.55),
 		Extra = def.Extra or accent:Lerp(BLACK, 0.2),
 	}
-	local builder = CritterBuilder.new(def.Name, Rarities.Info[def.Rarity].Scale, palette)
+	local scale = Rarities.Info[def.Rarity].Scale
+	local builder = CritterBuilder.new(def.Name, scale, palette)
 	local design = CritterDesigns[def.Name] or CritterDesigns.Generic
-	design(builder)
+	local ok, err = pcall(design, builder)
+	if not ok then
+		-- A broken design must never stop the game: fall back to the generic critter.
+		warn(`[UnitModelBuilder] Design of "{def.Name}" failed: {err}`)
+		builder.Model:Destroy()
+		builder = CritterBuilder.new(def.Name, scale, palette)
+		CritterDesigns.Generic(builder)
+	end
 	return builder:Finish()
 end
+
+-- Built designs, cloned for every critter of that name (mutations are applied to the clone).
+local templates: { [string]: Model } = {}
 
 local function buildFromTemplate(template: Model): Model?
 	local model = template:Clone()
@@ -234,7 +247,12 @@ function UnitModelBuilder.Build(unitName: string, mutation: string): Model?
 		model = buildFromTemplate(template)
 	end
 	if not model then
-		model = buildDesigned(def)
+		local designed = templates[unitName]
+		if not designed then
+			designed = buildDesigned(def)
+			templates[unitName] = designed
+		end
+		model = designed:Clone()
 	end
 	assert(model, "unreachable")
 

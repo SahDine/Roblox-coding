@@ -62,6 +62,21 @@ GameConfig.Conveyor = {
 	DeliverySpeed = 10, -- walk speed of a bought critter heading to its new base
 }
 
+-- Legendary, Mythic and Secret critters never come from the random conveyor roll: each rarity
+-- spawns on its own server-wide timer, shown on the "RARE CRITTERS" board next to the NEW CRITTERS
+-- portal. 2x Server Luck makes these timers run 2x faster. Mutations still roll for these critters.
+-- Times are in seconds. First = random delay { min, max } before the first one after a server start.
+-- WarnBefore (optional) = server-wide heads-up this many seconds before the spawn.
+GameConfig.RareSpawns = {
+	Order = { "Legendary", "Mythic", "Secret" }, -- board rows, top to bottom
+	Timers = {
+		Legendary = { Interval = 8 * 60, First = { 3 * 60, 5 * 60 } },
+		Mythic = { Interval = 25 * 60, First = { 10 * 60, 14 * 60 }, WarnBefore = 60 },
+		Secret = { Interval = 60 * 60, First = { 25 * 60, 35 * 60 }, WarnBefore = 60 },
+	} :: { [string]: { Interval: number, First: { number }, WarnBefore: number? } },
+	MinGap = 3, -- seconds between a timed critter and the previous conveyor critter (keeps them apart)
+}
+
 GameConfig.Steal = {
 	Enabled = true,
 	HoldDuration = 2,
@@ -91,7 +106,27 @@ GameConfig.Evolution = {
 }
 
 GameConfig.Lock = {
-	Duration = 60,
+	Duration = 60, -- seconds at base level 1 (+ BaseUpgrade.LockBonusPerLevel per level)
+}
+
+-- Base upgrades (the "Upgrade Base" station near the gate and the HUD button). The level is saved,
+-- kept through rebirths, and every level boosts the income of every critter of the base, makes
+-- the base lock last longer and changes the look of the castle (tiers below, seen by everybody).
+GameConfig.BaseUpgrade = {
+	MaxLevel = 10,
+	-- Costs[n] = price to go from level n to level n + 1.
+	Costs = { 1_000, 5_000, 25_000, 100_000, 400_000, 1_500_000, 6_000_000, 25_000_000, 100_000_000 },
+	IncomeBonusPerLevel = 0.1, -- +10% income per level above 1 (level 10 = x1.9)
+	LockBonusPerLevel = 5, -- +5 s of base lock per level above 1 (level 10 = 105 s)
+	Cooldown = 0.5, -- seconds between two upgrade requests of a player
+	AnnounceFromLevel = 10, -- server-wide message when a base reaches this level
+	-- Looks of the castle. A tier starts at FromLevel and lasts until the next one.
+	Tiers = {
+		{ FromLevel = 1, Name = "Stone Keep", Description = "Wood and stone", Color = Color3.fromRGB(205, 185, 160) },
+		{ FromLevel = 4, Name = "Royal Castle", Description = "Polished stone, banners, bigger flags", Color = Color3.fromRGB(110, 175, 255) },
+		{ FromLevel = 7, Name = "Crystal Citadel", Description = "Glowing crystals and magic walls", Color = Color3.fromRGB(150, 235, 255) },
+		{ FromLevel = 10, Name = "Golden Palace", Description = "Gold everywhere and a royal crown", Color = Color3.fromRGB(255, 205, 70) },
+	},
 }
 
 GameConfig.Slap = {

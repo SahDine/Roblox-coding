@@ -25,6 +25,12 @@
         },
         "RedeemCode": {
           "$className": "RemoteFunction"
+        },
+        "SlapFx": {
+          "$className": "RemoteEvent"
+        },
+        "UpgradeBase": {
+          "$className": "RemoteFunction"
         }
       }
     },
@@ -34,6 +40,9 @@
       }
     },
     "StarterPlayer": {
+      "$properties": {
+        "CameraMaxZoomDistance": 64
+      },
       "StarterPlayerScripts": {
         "Client": {
           "$path": "src/client"

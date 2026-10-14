@@ -11,7 +11,6 @@
 local CollectionService = game:GetService("CollectionService")
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
 local TextChatService = game:GetService("TextChatService")
 
 local Shared = ReplicatedStorage.Shared
@@ -145,95 +144,6 @@ local function updateBarriers()
 	end
 end
 
--- Critter animation -----------------------------------------------------------------
-
-type Animated = {
-	Motor: Motor6D?,
-	Root: BasePart?,
-	Phase: number,
-	Scale: number,
-	Floats: boolean,
-	Paint: { BasePart },
-	Rainbow: boolean,
-}
-
-local animated: { [Model]: Animated } = {}
-
-local function trackCritter(model: Instance)
-	if not model:IsA("Model") then
-		return
-	end
-	local root = model:FindFirstChild("HumanoidRootPart") :: BasePart?
-	local motor = root and root:FindFirstChild("Bounce") :: Motor6D?
-	local paint = {}
-	for _, descendant in model:GetDescendants() do
-		if descendant:IsA("BasePart") and descendant:GetAttribute("Paint") then
-			table.insert(paint, descendant)
-		end
-	end
-	animated[model] = {
-		Motor = motor,
-		Root = root,
-		Phase = math.random() * math.pi * 2,
-		Scale = model:GetAttribute("Scale") or 1,
-		Floats = model:GetAttribute("Floats") == true,
-		Paint = paint,
-		Rainbow = model:GetAttribute("Mutation") == "Rainbow",
-	}
-end
-
-local function animateCritters()
-	local camera = workspace.CurrentCamera
-	if not camera then
-		return
-	end
-	local cameraPosition = camera.CFrame.Position
-	local t = os.clock()
-
-	for model, info in animated do
-		local root = info.Root
-		if not root or not root.Parent then
-			continue
-		end
-		if (root.Position - cameraPosition).Magnitude > 160 then
-			continue
-		end
-
-		if info.Motor then
-			local phase = t + info.Phase
-			local moving = root.AssemblyLinearVelocity.Magnitude > 1
-			if moving then
-				local step = math.sin(phase * 11)
-				info.Motor.Transform = CFrame.new(0, math.abs(step) * 0.45 * info.Scale, 0) * CFrame.Angles(0, 0, step * 0.15)
-			elseif info.Floats then
-				-- Flying critters drift up and down slowly.
-				info.Motor.Transform = CFrame.new(0, (math.sin(phase * 1.6) + 1) * 0.35 * info.Scale, 0)
-					* CFrame.Angles(math.sin(phase * 1.6) * 0.05, math.sin(phase * 0.8) * 0.15, 0)
-			else
-				info.Motor.Transform = CFrame.new(0, (math.sin(phase * 2.2) + 1) * 0.12 * info.Scale, 0)
-					* CFrame.Angles(0, math.sin(phase * 1.1) * 0.12, 0)
-			end
-		end
-
-		if info.Rainbow then
-			for index, part in info.Paint do
-				part.Color = Color3.fromHSV((t * 0.25 + index * 0.07) % 1, 0.75, 1)
-			end
-		end
-	end
-end
-
-local function setupCritters()
-	for _, model in CollectionService:GetTagged("Critter") do
-		trackCritter(model)
-	end
-	CollectionService:GetInstanceAddedSignal("Critter"):Connect(trackCritter)
-	CollectionService:GetInstanceRemovedSignal("Critter"):Connect(function(model)
-		animated[model :: Model] = nil
-	end)
-	RunService.RenderStepped:Connect(animateCritters)
-end
-
 -- Home marker + carry beam --------------------------------------------------------------
 
 local function getHomeMarker(): BasePart?
@@ -352,7 +262,6 @@ end
 
 function WorldController.Start()
 	setupPrompts()
-	setupCritters()
 	setupHomeGuides()
 	setupKnockback()
 	setupChatTags()

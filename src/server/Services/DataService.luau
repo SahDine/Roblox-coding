@@ -50,6 +50,7 @@ local function getDefaultData()
 		Cash = GameConfig.Player.StartingCash,
 		TotalEarned = 0,
 		Rebirths = 0,
+		BaseLevel = 1, -- base upgrade level (UpgradeService), kept through rebirths
 		-- [guid] = { Name, Mutation, Slot, Stored }
 		Units = {},
 		-- Critters waiting for a free slot: { { Name, Mutation } }

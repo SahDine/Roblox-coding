@@ -12,25 +12,43 @@ local stubbyFeet, bipedLegs, quadLegs, arms = Helpers.stubbyFeet, Helpers.bipedL
 local Designs = {}
 
 -- Electric mouse with lightning tail and red cheeks.
+-- REFERENCE DESIGN for the triangle toolkit: bones for every moving part, nested ear bones in the head,
+-- attachments sunk into the shapes they hang from, round eyes / mouth, everything else faceted.
 Designs["Zappip"] = function(b)
-	local body = b:Ellipsoid("Body", V(1.75, 1.85, 1.6), V(0, 1.2, 0.05), nil, "Body")
+	local body = b:Ball("Body", V(1.8, 1.75, 1.55), V(0, 1.05, 0.05), nil, "Body")
 	b:SetCore(body)
-	local head = b:Ellipsoid("Head", V(2.0, 1.8, 1.7), V(0, 2.6, -0.15), nil, "Body")
-	b:MirrorLimb("Ear", V(0.5, 3.25, -0.1), V(1.2, 4.55, 0.0), V2(0.55, 0.22), "Body")
-	b:MirrorLimb("EarTip", V(1.0, 4.15, -0.02), V(1.27, 4.68, 0.0), V2(0.44, 0.24), "Accent")
-	stubbyFeet(b, 0.45, V(0.55, 0.3, 0.85), "Body")
-	arms(b, V(0.7, 1.6, -0.25), V(0.85, 1.25, -0.7), 0.3, "Body")
-	-- Lightning tail
-	b:Beam("Tail1", V(0, 0.85, 0.75), V(0, 1.5, 1.4), V2(0.18, 0.35), "Extra")
-	b:Beam("Tail2", V(0, 1.45, 1.4), V(0, 1.3, 1.85), V2(0.18, 0.5), "Body")
-	b:Beam("Tail3", V(0, 1.25, 1.85), V(0, 2.55, 2.55), V2(0.18, 0.75), "Body")
-	b:Box("TailTop", V(0.2, 0.9, 1.15), V(0, 2.8, 2.55), V(-35, 0, 0), "Body")
-	b:Ellipsoid("Stripe1", V(1.05, 0.2, 0.55), V(0, 1.55, 0.72), V(25, 0, 0), "Extra")
-	b:Ellipsoid("Stripe2", V(0.9, 0.18, 0.5), V(0, 1.15, 0.82), V(10, 0, 0), "Extra")
-	b:Eyes(head, 0.45, 0.15, V(0.38, 0.45, 0.2), "Black")
-	b:Cheeks(head, 0.68, -0.25, 0.48)
-	b:Mouth(head, -0.3, 0.4, true)
-	b:FaceDot("Nose", head, 0, -0.05, V(0.12, 0.08, 0.08), "Black")
+	-- Brown stripes on the back: flat triangles lying on the body.
+	b:Tri("Stripe1", V(-0.5, 1.75, 0.62), V(0.5, 1.75, 0.62), V(0, 1.45, 0.78), "Extra")
+	b:Tri("Stripe2", V(-0.45, 1.3, 0.8), V(0.45, 1.3, 0.8), V(0, 1.02, 0.86), "Extra")
+
+	b:MirrorBone("LegFoot", V(0.45, 0.5, -0.1), nil, function()
+		b:Ball("Foot", V(0.7, 0.42, 0.95), V(0.45, 0.21, -0.3), nil, "Body", { Detail = 0 })
+	end)
+	b:MirrorBone("Arm", V(0.62, 1.5, -0.45), { Phase = 0.5 }, function()
+		b:Limb("Arm", V(0.55, 1.6, -0.4), V(0.88, 1.12, -0.82), 0.34, "Body")
+		b:Ball("Paw", V(0.3, 0.3, 0.3), V(0.88, 1.12, -0.84), nil, "Body", { Detail = 0 })
+	end)
+
+	b:Bone("Head", V(0, 1.85, -0.05), nil, function()
+		local head = b:Ball("Head", V(2.05, 1.75, 1.65), V(0, 2.6, -0.2), nil, "Body")
+		b:Eyes(head, 0.45, 0.12, V(0.4, 0.46, 0.3), "Black")
+		b:Cheeks(head, 0.72, -0.3, 0.46)
+		b:Mouth(head, -0.36, 0.34, true)
+		b:FaceDot("Nose", head, 0, -0.06, V(0.12, 0.08, 0.1), "Black")
+		-- Long pointed ears with black tips (pyramids, sunk 0.15 into the head).
+		b:MirrorBone("Ear", V(0.55, 3.25, -0.15), nil, function()
+			b:Spike("Ear", V(0.5, 3.15, -0.15), V(1.12, 4.55, -0.05), 0.62, 0.36, "Body")
+			b:Spike("EarTip", V(0.98, 4.2, -0.075), V(1.17, 4.68, -0.04), 0.33, 0.24, "Accent")
+		end)
+	end)
+
+	-- Zig-zag lightning tail: flat beams, brown at the base.
+	b:Bone("Tail", V(0, 1.0, 0.7), nil, function()
+		b:Beam("Tail1", V(0, 0.8, 0.62), V(0, 1.45, 1.25), V2(0.4, 0.16), "Extra")
+		b:Beam("Tail2", V(0, 1.4, 1.22), V(0, 1.25, 1.75), V2(0.5, 0.16), "Body")
+		b:Beam("Tail3", V(0, 1.2, 1.7), V(0, 2.35, 2.45), V2(0.75, 0.16), "Body")
+		b:Tri("TailTip", V(0, 2.05, 2.15), V(0, 2.95, 2.25), V(0, 2.55, 2.95), "Body", { Thickness = 0.16 })
+	end)
 end
 
 -- TODO: Voltmouse (not sculpted yet, uses the Generic design)
