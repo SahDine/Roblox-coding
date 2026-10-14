@@ -1,0 +1,49 @@
+{
+  "name": "StealACritter",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "Shared": {
+        "$path": "src/shared"
+      },
+      "Remotes": {
+        "$className": "Folder",
+        "Notify": {
+          "$className": "RemoteEvent"
+        },
+        "Knockback": {
+          "$className": "RemoteEvent"
+        },
+        "TeleportHome": {
+          "$className": "RemoteEvent"
+        },
+        "RequestRebirth": {
+          "$className": "RemoteFunction"
+        },
+        "ClaimDaily": {
+          "$className": "RemoteFunction"
+        },
+        "RedeemCode": {
+          "$className": "RemoteFunction"
+        }
+      }
+    },
+    "ServerScriptService": {
+      "Server": {
+        "$path": "src/server"
+      }
+    },
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Client": {
+          "$path": "src/client"
+        }
+      }
+    },
+    "Workspace": {
+      "$properties": {
+        "StreamingEnabled": false
+      }
+    }
+  }
+}
