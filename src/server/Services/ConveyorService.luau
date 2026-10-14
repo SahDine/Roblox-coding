@@ -376,7 +376,7 @@ local BOARD_TAG = "RareSpawnBoard"
 
 local GOLD = Color3.fromRGB(255, 205, 80)
 local STONE = Color3.fromRGB(150, 145, 160)
-local DARK_STONE = Color3.fromRGB(70, 65, 85)
+local POST_STONE = Color3.fromRGB(105, 96, 128)
 local MAGIC = Color3.fromRGB(170, 110, 255)
 local SUBTEXT = Color3.fromRGB(205, 195, 235)
 
@@ -580,12 +580,12 @@ local function buildRareBoard()
 	buildBoardGui(panel)
 
 	local gold = { Color = GOLD, Material = Enum.Material.Metal, CollisionGroup = "Decor", Name = "Frame" }
-	local stone = { Color = DARK_STONE, Material = Enum.Material.Slate, CollisionGroup = "Decor", Name = "Post" }
+	local stone = { Color = POST_STONE, Material = Enum.Material.Slate, CollisionGroup = "Decor", Name = "Post" }
 	local rock = { Color = STONE, Material = Enum.Material.Slate, CollisionGroup = "Decor", Name = "Rock" }
 
 	-- Gold bars along the top and bottom edges (their ends disappear in the posts).
 	for _, y in { top + 0.3, BOARD_BOTTOM - 0.3 } do
-		LowPoly.Tube({ at(-half - 0.5, y, 0), at(half + 0.5, y, 0) }, { 0.7 }, gold, model, { Sides = 3, Up = normal })
+		LowPoly.Tube({ at(-half - 0.5, y, 0), at(half + 0.5, y, 0) }, { 0.8 }, gold, model, { Sides = 3, Up = normal })
 	end
 
 	for side = -1, 1, 2 do
