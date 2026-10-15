@@ -681,7 +681,8 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 		}, CFrame.new(0, beamY, GATE_Z))
 	)
 
-	-- One gem per level on the gate beam: lit gems show the base level to everybody.
+	-- One gem per level on the gate beam: lit gems show the base level to everybody. Gem 1 is at
+	-- local +X, i.e. on the left of someone facing the gate, so the row fills from left to right.
 	local maxLevel = GameConfig.BaseUpgrade.MaxLevel
 	local gemSpacing = math.min(1.9, (ENTRANCE_WIDTH + 5) / maxLevel)
 	for gem = 1, maxLevel do
@@ -694,7 +695,7 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 				Material = Enum.Material.Slate,
 				CanCollide = false,
 				CastShadow = false,
-			}, CFrame.new((gem - (maxLevel + 1) / 2) * gemSpacing, beamY, GATE_Z - 1.85) * CFrame.Angles(0, 0, math.rad(45)))
+			}, CFrame.new(((maxLevel + 1) / 2 - gem) * gemSpacing, beamY, GATE_Z - 1.85) * CFrame.Angles(0, 0, math.rad(45)))
 		)
 	end
 

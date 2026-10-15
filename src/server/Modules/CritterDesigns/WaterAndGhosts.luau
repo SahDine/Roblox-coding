@@ -381,7 +381,8 @@ Designs["Puddlet"] = function(b)
 	end)
 
 	b:Bone("Head", V(0, 1.8, -0.05), nil, function()
-		local head = b:Ball("Head", V(2.15, 1.85, 1.85), V(0, 2.66, -0.18), nil, "Body")
+		-- sunk into the top of the shell so the head sits on the shoulders, not on a point
+		local head = b:Ball("Head", V(2.15, 1.85, 1.85), V(0, 2.5, -0.18), nil, "Body")
 		b:Eyes(head, 0.46, 0.12, V(0.5, 0.62, 0.26), TURTLE_EYE)
 		-- Cheerful open smile.
 		grin(b, head, { HalfWidth = 0.46, Top = -0.32, Bottom = -0.58, Curl = 0.16, Color = "Mouth", Lift = 0.06 })
@@ -407,15 +408,15 @@ Designs["Shellwave"] = function(b)
 	end)
 
 	b:Bone("Head", V(0, 2.28, -0.05), nil, function()
-		local head = b:Ball("Head", V(1.95, 1.75, 1.8), V(0, 3.0, -0.2), nil, "Body")
+		local head = b:Ball("Head", V(1.95, 1.75, 1.8), V(0, 2.86, -0.2), nil, "Body")
 		b:Eyes(head, 0.4, 0.1, V(0.44, 0.56, 0.25), TURTLE_EYE)
 		b:Mouth(head, -0.36, 0.48)
 		fang(b, head, -0.2, -0.38, 0.12, 0.15)
 		fang(b, head, 0.2, -0.38, 0.12, 0.15)
 		-- Feathery ears: a big white feather sweeping up, out and back, its tip curling backwards.
-		b:MirrorBone("Ear", V(0.6, 3.45, 0.0), nil, function()
-			b:Spike("Ear", V(0.5, 3.35, 0.0), V(1.45, 4.6, 0.55), 1.0, 0.6, "Extra", { Thickness = THIN }, V(0.4, 0.3, -1))
-			b:Blade("EarCurl", V(1.25, 4.38, 0.45), V(1.8, 4.1, 1.0), 0.55, "Extra", { Thickness = 0.08 }, V(0.6, 0.3, -1))
+		b:MirrorBone("Ear", V(0.6, 3.31, 0.0), nil, function()
+			b:Spike("Ear", V(0.5, 3.21, 0.0), V(1.45, 4.46, 0.55), 1.0, 0.6, "Extra", { Thickness = THIN }, V(0.4, 0.3, -1))
+			b:Blade("EarCurl", V(1.25, 4.24, 0.45), V(1.8, 3.96, 1.0), 0.55, "Extra", { Thickness = 0.08 }, V(0.6, 0.3, -1))
 		end)
 	end)
 
@@ -734,8 +735,8 @@ Designs["Tidewyrm"] = function(b)
 			-- Upper jaw: a wide snout with a ridge on top, dark palate underneath, two big fangs.
 			b:Spike("UpperJaw", V(0, 4.83, -1.05), V(0, 4.77, -2.95), 1.95, 0.95, "Body", nil, UP)
 			b:Tri("Palate", V(-0.66, 4.42, -1.3), V(0.66, 4.42, -1.3), V(0, 4.64, -2.6), "Mouth", { Thickness = 0.05 })
-			for _, x in { -0.45, 0.45 } do
-				b:Tri("Fang", V(x - 0.13, 4.53, -2.05), V(x + 0.13, 4.53, -2.05), V(x * 0.92, 3.9, -2.15), "White", { Thickness = 0.06 })
+			for _, x in { -0.42, 0.42 } do
+				b:Tri("Fang", V(x - 0.13, 4.67, -2.05), V(x + 0.13, 4.67, -2.05), V(x * 0.92, 3.95, -2.15), "White", { Thickness = 0.06 })
 			end
 			-- Dark throat between the jaws.
 			local throat = b:OnSurface(skull, 0, -0.5)
@@ -750,13 +751,14 @@ Designs["Tidewyrm"] = function(b)
 			-- Lower jaw (snaps): cream, ridge underneath, red mouth on top, two small fangs.
 			b:Bone("Jaw", V(0, 4.37, -1), nil, function()
 				b:Spike("LowerJaw", V(0, 4.33, -1), V(0, 3.4, -2.3), 1.5, 0.62, "Belly", nil, V(0, -1, 0.3))
-				b:Tri("Tongue", V(-0.52, 4.41, -1.12), V(0.52, 4.41, -1.12), V(0, 3.67, -2.05), "Mouth", { Thickness = 0.06 })
-				for _, x in { -0.38, 0.38 } do
+				-- Red mouth lying just above the top face of the lower jaw (which faces up and forwards).
+				b:Tri("Tongue", V(-0.66, 4.51, -1.24), V(0.66, 4.51, -1.24), V(0, 3.61, -2.16), "Mouth", { Thickness = 0.06 })
+				for _, x in { -0.3, 0.3 } do
 					b:Tri(
 						"LowFang",
-						V(x - 0.1, 3.85, -1.85),
-						V(x + 0.1, 3.85, -1.85),
-						V(x * 0.92, 4.27, -1.95),
+						V(x - 0.1, 3.99, -1.64),
+						V(x + 0.1, 3.99, -1.64),
+						V(x * 0.95, 4.42, -1.76),
 						"White",
 						{ Thickness = 0.06 }
 					)

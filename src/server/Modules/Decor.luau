@@ -1,11 +1,16 @@
 --[[
 	Decor
-	Fantasy props built from parts: giant mushrooms, glowing crystals, magic
-	trees, floating islands, torches, lanterns and fireflies.
+	Shared building blocks for the scenery: anchored parts, lights, torches, lanterns, fireflies,
+	plus the helpers used by the low-poly props (Flora, Landmarks, Horizon):
+	  * Decor.Rng: deterministic random numbers (the same layout in every server and in tests),
+	  * Decor.Facets: LowPoly part properties for a prop,
+	  * Decor.AboveGround / Decor.DrawShaded: skip buried triangles, vary facet colours.
 
 	Every prop is anchored and in the "Decor" collision group: players bump
-	into trunks and stems, critters walk through everything.
+	into trunks and rocks, critters walk through everything.
 ]]
+
+local LowPoly = require(script.Parent.LowPoly)
 
 local Decor = {}
 
@@ -121,157 +126,100 @@ function Decor.Lantern(parent: Instance, base: Vector3, color: Color3)
 	Decor.Light(glow, color, 18, 1.4)
 end
 
-function Decor.Mushroom(parent: Instance, base: Vector3, scale: number, capColor: Color3)
-	local s = scale
-	local stemHeight = 7 * s
-	Decor.Column("Stem", stemHeight, 2.2 * s, base, Color3.fromRGB(245, 235, 215), parent)
-	local capCenter = base + Vector3.new(0, stemHeight + 0.6 * s, 0)
-	Decor.Ellipsoid("Cap", Vector3.new(9, 4.5, 9) * s, CFrame.new(capCenter), capColor, parent, { CanCollide = false })
-	local gills = Decor.Column("Gills", 0.4 * s, 7.5 * s, capCenter - Vector3.new(0, 0.6 * s, 0), capColor:Lerp(Color3.new(1, 1, 1), 0.5), parent, {
-		Material = Enum.Material.Neon,
-		CanCollide = false,
-		CastShadow = false,
-	})
-	Decor.Light(gills, capColor:Lerp(Color3.new(1, 1, 1), 0.3), 14 * s, 1.2)
-	for index = 1, 6 do
-		local angle = index * 1.05 + s
-		local radius = (if index % 2 == 0 then 2.6 else 1.4) * s
-		local spot = capCenter + Vector3.new(math.cos(angle) * radius, 1.6 * s - radius * 0.25, math.sin(angle) * radius)
-		Decor.Ellipsoid("Spot", Vector3.new(1.1, 0.5, 1.1) * s, CFrame.new(spot), Color3.fromRGB(255, 250, 240), parent, { CanCollide = false })
-	end
-end
+-- Low-poly helpers ---------------------------------------------------------------------------
 
-function Decor.Crystal(parent: Instance, base: Vector3, scale: number, color: Color3)
-	local seeds = { { 0, 0, 0, 1 }, { 1.4, 0.4, 20, 0.65 }, { -1.2, -0.6, -25, 0.7 }, { 0.3, -1.3, 10, 0.5 } }
-	for index, seed in seeds do
-		local height = 8 * scale * seed[4]
-		local offset = Vector3.new(seed[1], 0, seed[2]) * scale
-		local cframe = CFrame.new(base + offset)
-			* CFrame.Angles(math.rad(seed[3]), math.rad(index * 37), math.rad(-seed[3] * 0.6))
-			* CFrame.new(0, height / 2, 0)
-		local shard = Decor.Part({
-			Name = "Crystal",
-			Size = Vector3.new(1.6, height, 1.6) * Vector3.new(scale * seed[4] + 0.4, 1, scale * seed[4] + 0.4),
-			CFrame = cframe * CFrame.Angles(0, math.rad(45), 0),
-			Color = color,
-			Material = Enum.Material.Glass,
-			Transparency = 0.15,
-			Reflectance = 0.2,
-		}, parent)
-		local core = Decor.Part({
-			Name = "CrystalCore",
-			Size = shard.Size * Vector3.new(0.45, 0.8, 0.45),
-			CFrame = shard.CFrame,
-			Color = color,
-			Material = Enum.Material.Neon,
-			CanCollide = false,
-			CastShadow = false,
-		}, parent)
-		if index == 1 then
-			Decor.Light(core, color, 16 * scale, 1.5)
-		end
-	end
-end
-
-local LEAF_COLORS = {
-	Color3.fromRGB(255, 160, 205),
-	Color3.fromRGB(170, 120, 255),
-	Color3.fromRGB(90, 210, 190),
-	Color3.fromRGB(255, 205, 90),
-	Color3.fromRGB(110, 190, 90),
+export type Rng = {
+	NextNumber: (Rng, number, number) -> number,
+	NextInteger: (Rng, number, number) -> number,
 }
 
-function Decor.Tree(parent: Instance, base: Vector3, scale: number, variant: number)
-	local s = scale
-	local leaf = LEAF_COLORS[(variant - 1) % #LEAF_COLORS + 1]
-	local bark = Color3.fromRGB(105, 75, 60)
-	-- Twisted trunk made of three tilted segments.
-	local point = base
-	for index = 1, 3 do
-		local lean = Vector3.new(math.sin(variant + index) * 1.2, 4.5, math.cos(variant * 2 + index) * 1.2) * s
-		local nextPoint = point + lean
-		local mid = (point + nextPoint) / 2
-		Decor.Part({
-			Name = "Trunk",
-			Size = Vector3.new((2.4 - index * 0.45) * s, lean.Magnitude + 0.6 * s, (2.4 - index * 0.45) * s),
-			CFrame = CFrame.lookAt(mid, nextPoint) * CFrame.Angles(math.rad(90), 0, 0),
-			Color = bark,
-			Material = Enum.Material.Wood,
-			CanCollide = index == 1,
-		}, parent)
-		point = nextPoint
+--[[
+	Park-Miller generator. Used instead of Random so the map layout does not depend on the engine's
+	generator: the offline map checks and every server see exactly the same scenery.
+]]
+function Decor.Rng(seed: number): Rng
+	local state = math.floor(math.abs(seed) * 7919) % 2147483646 + 1
+	local rng = {}
+	function rng.NextNumber(_: Rng, low: number, high: number): number
+		state = state * 16807 % 2147483647
+		return low + (high - low) * (state - 1) / 2147483646
 	end
-	for index, offset in { Vector3.new(0, 1.5, 0), Vector3.new(3, 0, 1), Vector3.new(-2.5, 0.3, -1.5), Vector3.new(0.5, -0.5, 3), Vector3.new(-1, 3.2, 0.5) } do
-		local size = (if index == 1 then 8 else 5.5) * s
-		Decor.Ellipsoid("Leaves", Vector3.new(size, size * 0.8, size), CFrame.new(point + offset * s), leaf, parent, {
-			Material = Enum.Material.Grass,
-			CanCollide = false,
-		})
+	function rng.NextInteger(self: Rng, low: number, high: number): number
+		return math.min(high, low + math.floor(self:NextNumber(0, 1) * (high - low + 1)))
 	end
-	-- Glowing fruits.
-	for index = 1, 3 do
-		local angle = variant + index * 2.1
-		local fruit = Decor.Ellipsoid(
-			"Fruit",
-			Vector3.new(0.9, 0.9, 0.9) * s,
-			CFrame.new(point + Vector3.new(math.cos(angle) * 3.6, -2.2, math.sin(angle) * 3.6) * s),
-			leaf:Lerp(Color3.new(1, 1, 1), 0.5),
-			parent,
-			{ Material = Enum.Material.Neon, CanCollide = false, CastShadow = false }
-		)
-		if index == 1 then
-			Decor.Light(fruit, leaf, 10 * s, 1)
+	return (rng :: any) :: Rng
+end
+
+-- LowPoly part properties. Only `solid` facets collide (with players: critters ignore Decor).
+function Decor.Facets(name: string, color: Color3, material: Enum.Material?, solid: boolean?): LowPoly.PartProps
+	return {
+		Name = name,
+		Color = color,
+		Material = material or Enum.Material.SmoothPlastic,
+		CanCollide = solid == true,
+		CollisionGroup = "Decor",
+	}
+end
+
+-- Drops the triangles lying entirely below `groundY` (buried faces of rocks, trunks...).
+function Decor.AboveGround(triangles: { LowPoly.TriangleWithInside }, groundY: number): { LowPoly.TriangleWithInside }
+	local kept = {}
+	for _, triangle in triangles do
+		if math.max(triangle.A.Y, triangle.B.Y, triangle.C.Y) > groundY then
+			table.insert(kept, triangle)
 		end
 	end
+	return kept
 end
 
-function Decor.FloatingIsland(parent: Instance, center: Vector3, scale: number, variant: number)
-	local s = scale
-	local rock = Color3.fromRGB(120, 110, 125)
-	Decor.Ellipsoid("IslandTop", Vector3.new(30, 6, 26) * s, CFrame.new(center), Color3.fromRGB(100, 185, 95), parent, {
-		Material = Enum.Material.Grass,
-	})
-	Decor.Ellipsoid("IslandRock", Vector3.new(26, 18, 22) * s, CFrame.new(center - Vector3.new(0, 7, 0) * s), rock, parent, {
-		Material = Enum.Material.Slate,
-	})
-	Decor.Ellipsoid("IslandTip", Vector3.new(12, 16, 10) * s, CFrame.new(center - Vector3.new(1, 17, 0) * s), rock, parent, {
-		Material = Enum.Material.Slate,
-	})
-	Decor.Tree(parent, center + Vector3.new(-5, 2, 2) * s, 0.9 * s, variant)
-	Decor.Crystal(parent, center + Vector3.new(7, 2, -4) * s, 0.8 * s, Color3.fromRGB(120, 220, 255))
-	-- Waterfall pouring off the edge.
-	Decor.Part({
-		Name = "Waterfall",
-		Size = Vector3.new(4, 40, 0.6) * s,
-		CFrame = CFrame.new(center + Vector3.new(0, -18, 12) * s),
-		Color = Color3.fromRGB(150, 210, 255),
-		Material = Enum.Material.Glass,
-		Transparency = 0.35,
-		CanCollide = false,
-		CastShadow = false,
-	}, parent)
-end
-
-function Decor.Flowers(parent: Instance, center: Vector3, radius: number, count: number, seed: number)
-	local random = Random.new(seed)
-	for _ = 1, count do
-		local angle = random:NextNumber(0, math.pi * 2)
-		local distance = random:NextNumber(0, radius)
-		local position = center + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance)
-		local color = LEAF_COLORS[random:NextInteger(1, #LEAF_COLORS)]
-		Decor.Part({
-			Name = "FlowerStem",
-			Size = Vector3.new(0.2, 1.2, 0.2),
-			CFrame = CFrame.new(position + Vector3.new(0, 0.6, 0)),
-			Color = Color3.fromRGB(70, 150, 70),
-			CanCollide = false,
-			CastShadow = false,
-		}, parent)
-		Decor.Ellipsoid("Flower", Vector3.new(0.9, 0.4, 0.9), CFrame.new(position + Vector3.new(0, 1.3, 0)), color, parent, {
-			CanCollide = false,
-			CastShadow = false,
-		})
+-- Outward unit normal of a triangle (or zero for a degenerate one).
+function Decor.Normal(triangle: LowPoly.TriangleWithInside): Vector3
+	local normal = (triangle.B - triangle.A):Cross(triangle.C - triangle.A)
+	if normal.Magnitude < 1e-9 then
+		return Vector3.zero
 	end
+	normal = normal.Unit
+	local inside = triangle.Inside
+	if inside and (triangle.A - inside):Dot(normal) < 0 then
+		normal = -normal
+	end
+	return normal
+end
+
+--[[
+	Draws triangles with a slightly different shade per facet (the hand-painted low-poly look).
+	tint (optional) picks a colour per facet from its outward normal (moss on top of rocks, snow...).
+]]
+function Decor.DrawShaded(
+	triangles: { LowPoly.TriangleWithInside },
+	props: LowPoly.PartProps,
+	parent: Instance,
+	thickness: number,
+	rng: Rng,
+	amount: number,
+	tint: ((normal: Vector3, triangle: LowPoly.TriangleWithInside) -> Color3?)?
+): { BasePart }
+	local parts = {}
+	local base = props.Color
+	for _, triangle in triangles do
+		local color = base
+		if tint then
+			color = tint(Decor.Normal(triangle), triangle) or base
+		end
+		local shade = rng:NextNumber(-amount, amount)
+		color = if shade >= 0 then color:Lerp(Color3.new(1, 1, 1), shade) else color:Lerp(Color3.new(0, 0, 0), -shade)
+		local facetProps = table.clone(props)
+		facetProps.Color = color
+		for _, part in LowPoly.DrawTriangles({ triangle }, facetProps, parent, thickness) do
+			table.insert(parts, part)
+		end
+	end
+	return parts
+end
+
+-- Plate thickness for a low-poly shape whose smallest extent is `size` (same rule as LowPoly).
+function Decor.Thickness(size: number): number
+	return math.clamp(size * 0.08, 0.05, 1)
 end
 
 return Decor
