@@ -102,7 +102,7 @@ end
 
 -- Slap glove ------------------------------------------------------------------------------------
 --[[
-	A big cartoon hand (about 2.7x a normal hand) made of low-poly triangles. It is designed in the
+	A big cartoon hand (about 3x a normal hand) made of low-poly triangles. It is designed in the
 	grip frame (the frame Roblox attaches tools to, at the end of the right arm, the same on R15 and
 	R6): -Z runs from the wrist to the fingertips (along the arm), +Z goes up the arm (inside the
 	cuff), +Y is the front of the arm and -X its inner side. The thumb is on +Y and the palm faces
@@ -111,7 +111,8 @@ end
 ]]
 
 type GloveStyle = {
-	Scale: number,
+	HandScale: number, -- 1 = palm 1.6 studs wide, 2.7 long with the fingers
+	CuffScale: number, -- 1 = just wide enough for a 1 x 1 arm
 	Skin: Color3,
 	SkinMaterial: Enum.Material,
 	Cuff: Color3,
@@ -125,7 +126,8 @@ type GloveStyle = {
 
 local GLOVES: { Normal: GloveStyle, Mega: GloveStyle } = {
 	Normal = {
-		Scale = 1,
+		HandScale = 1.12,
+		CuffScale = 1,
 		Skin = Color3.fromRGB(255, 205, 160),
 		SkinMaterial = Enum.Material.SmoothPlastic,
 		Cuff = Color3.fromRGB(225, 55, 55),
@@ -136,7 +138,8 @@ local GLOVES: { Normal: GloveStyle, Mega: GloveStyle } = {
 		HitSpeed = 1.5,
 	},
 	Mega = {
-		Scale = 1.3,
+		HandScale = 1.45,
+		CuffScale = 1.12,
 		Skin = Color3.fromRGB(255, 198, 45),
 		SkinMaterial = Enum.Material.Foil,
 		Cuff = Color3.fromRGB(125, 50, 215),
@@ -172,11 +175,17 @@ local PALM_OUTLINE = {
 	Vector2.new(-0.8, -0.6),
 }
 
+-- Hand space (unscaled, wrist at the origin) -> grip frame. The cuff is not cocked: it stays
+-- around the arm.
+local function wristFrame(style: GloveStyle): CFrame
+	return CFrame.new(0, 0, -0.05 * style.CuffScale) * CFrame.Angles(0, WRIST_COCK, 0)
+end
+
 -- Builds the glove parts (welded to the returned Handle) and sets tool.Grip.
 local function buildGlove(tool: Tool, style: GloveStyle): BasePart
-	local scale = style.Scale
-	-- Hand space -> grip frame. The cuff is not cocked: it stays around the arm.
-	local wrist = CFrame.new(0, 0, -0.05 * scale) * CFrame.Angles(0, WRIST_COCK, 0)
+	local scale = style.HandScale
+	local cuffScale = style.CuffScale
+	local wrist = wristFrame(style)
 	local function hand(x: number, y: number, z: number): Vector3
 		return wrist:PointToWorldSpace(Vector3.new(x, y, z) * scale)
 	end
@@ -213,7 +222,7 @@ local function buildGlove(tool: Tool, style: GloveStyle): BasePart
 	-- Fingers: a hidden root inside the palm, then a tapered tube curling a little towards the palm.
 	local backOfHand = wrist:VectorToWorldSpace(Vector3.xAxis)
 	local function digit(points: { Vector3 }, radii: { number })
-		for _, triangle in LowPoly.TubeTriangles(points, radii, { Sides = 3, CapEnd = 0.9, Up = backOfHand }) do
+		for _, triangle in LowPoly.TubeTriangles(points, radii, { Sides = 3, CapEnd = 0.6, Up = backOfHand }) do
 			table.insert(skin, triangle)
 		end
 	end
@@ -230,10 +239,10 @@ local function buildGlove(tool: Tool, style: GloveStyle): BasePart
 	-- Thumb: up and forward, along the side of the palm.
 	digit({ hand(0, 0.42, -0.5), hand(-0.08, 0.86, -0.74), hand(-0.18, 1.18, -1.2) }, { 0, 0.26 * scale, 0.22 * scale })
 
-	-- Cuff around the end of the arm, a little wider where the arm goes in.
+	-- Cuff around the end of the arm, flared where the arm goes in.
 	local cuff = LowPoly.TubeTriangles(
-		{ Vector3.new(0, 0, 0.75) * scale, Vector3.new(0, 0, -0.15) * scale },
-		{ 0.92 * scale, 0.85 * scale },
+		{ Vector3.new(0, 0, 0.62) * cuffScale, Vector3.new(0, 0, -0.12) * cuffScale },
+		{ 0.86 * cuffScale, 0.74 * cuffScale },
 		{ Sides = 6, CapStart = 0.04, CapEnd = 0.04 }
 	)
 
@@ -246,16 +255,16 @@ local function buildGlove(tool: Tool, style: GloveStyle): BasePart
 			CanCollide = false,
 			CollisionGroup = "Players",
 		}
-		for _, part in LowPoly.DrawTriangles(triangles, props, tool, thickness * scale) do
+		for _, part in LowPoly.DrawTriangles(triangles, props, tool, thickness) do
 			table.insert(parts, part)
 		end
 	end
-	draw(skin, "Glove", style.Skin, style.SkinMaterial, 0.08)
-	draw(cuff, "Cuff", style.Cuff, style.CuffMaterial, 0.1)
+	draw(skin, "Glove", style.Skin, style.SkinMaterial, 0.08 * scale)
+	draw(cuff, "Cuff", style.Cuff, style.CuffMaterial, 0.1 * cuffScale)
 	if style.Gem then
 		local gemCFrame = wrist * CFrame.new(Vector3.new(0.42, 0.04, -0.82) * scale)
 		local gem = LowPoly.TransformMesh(LowPoly.Octahedron(), gemCFrame, Vector3.new(0.36, 0.62, 0.62) * scale)
-		draw(LowPoly.MeshTriangles(gem), "Gem", style.Gem, Enum.Material.Neon, 0.06)
+		draw(LowPoly.MeshTriangles(gem), "Gem", style.Gem, Enum.Material.Neon, 0.06 * scale)
 	end
 
 	-- LowPoly makes anchored decor: turn the facets into weightless glove pieces.
@@ -274,8 +283,8 @@ end
 
 -- Swing trail (switched on by SlapController during the sweep) and the sounds.
 local function addGloveEffects(handle: BasePart, style: GloveStyle)
-	local scale = style.Scale
-	local wrist = CFrame.new(0, 0, -0.05 * scale) * CFrame.Angles(0, WRIST_COCK, 0)
+	local scale = style.HandScale
+	local wrist = wristFrame(style)
 	local function attachment(name: string, point: Vector3): Attachment
 		local attachment = Instance.new("Attachment")
 		attachment.Name = name
@@ -330,18 +339,26 @@ local function addGloveEffects(handle: BasePart, style: GloveStyle)
 	hit.Parent = handle
 end
 
--- A ready-to-use Slap tool (not parented, no gameplay connection).
+local templates: { [boolean]: Tool } = {}
+
+-- A ready-to-use Slap tool (not parented, no gameplay connection). Each glove is built once and
+-- cloned for every character.
 function CombatService.CreateSlapTool(mega: boolean): Tool
-	local style = if mega then GLOVES.Mega else GLOVES.Normal
-	local tool = Instance.new("Tool")
-	tool.Name = "Slap"
-	tool.ToolTip = if mega then "Mega Slap!" else "Slap thieves to make them drop critters"
-	tool.CanBeDropped = false
-	tool.RequiresHandle = true
-	tool:SetAttribute("Mega", mega)
-	local handle = buildGlove(tool, style)
-	addGloveEffects(handle, style)
-	return tool
+	local template = templates[mega]
+	if not template then
+		local style = if mega then GLOVES.Mega else GLOVES.Normal
+		local tool = Instance.new("Tool")
+		tool.Name = "Slap"
+		tool.ToolTip = if mega then "Mega Slap!" else "Slap thieves to make them drop critters"
+		tool.CanBeDropped = false
+		tool.RequiresHandle = true
+		tool:SetAttribute("Mega", mega)
+		local handle = buildGlove(tool, style)
+		addGloveEffects(handle, style)
+		templates[mega] = tool
+		template = tool
+	end
+	return template:Clone()
 end
 
 local function giveSlapTool(player: Player)
@@ -349,9 +366,12 @@ local function giveSlapTool(player: Player)
 	if not backpack then
 		return
 	end
-	for _, container in { backpack, player.Character } do
+	local character = player.Character
+	local wasEquipped = false
+	for _, container in { backpack, character } do
 		local old = container and container:FindFirstChild("Slap")
 		if old then
+			wasEquipped = wasEquipped or container == character
 			old:Destroy()
 		end
 	end
@@ -361,6 +381,14 @@ local function giveSlapTool(player: Player)
 		onSlap(player, tool)
 	end)
 	tool.Parent = backpack
+
+	-- Upgraded to the Mega glove while holding the old one: keep it in hand.
+	if wasEquipped and character and character.Parent then
+		local humanoid = character:FindFirstChildOfClass("Humanoid")
+		if humanoid and humanoid.Health > 0 then
+			humanoid:EquipTool(tool)
+		end
+	end
 end
 
 local function onCharacterAdded(player: Player, character: Model)

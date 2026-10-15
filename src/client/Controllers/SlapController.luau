@@ -196,7 +196,11 @@ local function step()
 	local now = os.clock()
 	for character, swing in swings do
 		local t = now - swing.Start
-		if t >= DURATION or not character:IsDescendantOf(workspace) or not (alive(swing.Shoulder) and alive(swing.Elbow) and alive(swing.Waist)) then
+		if
+			t >= DURATION
+			or not character:IsDescendantOf(workspace)
+			or not (alive(swing.Shoulder) and alive(swing.Elbow) and alive(swing.Waist))
+		then
 			finish(character, swing)
 			continue
 		end

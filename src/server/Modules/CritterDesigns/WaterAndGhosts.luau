@@ -15,6 +15,7 @@ local SHELL_RIM = Color3.fromRGB(250, 246, 232)
 local GHOST_EYE = Color3.fromRGB(245, 235, 250)
 local GAS = Color3.fromRGB(170, 100, 230)
 local GLOOM_EYE = Color3.fromRGB(225, 40, 55)
+local WYRM_EYE = Color3.fromRGB(220, 60, 60)
 
 local SIDE = V(1, 0, 0)
 -- Up hint for limbs: puts a ridge (not a flat facet) on the outer side.
@@ -60,39 +61,52 @@ local function turtleTorso(b, center: Vector3, width: number, height: number, fr
 		table.insert(rimFaces, { rim + k, shell + k1, rim + k1 })
 		table.insert(if shellAlt and k % 2 == 0 then altFaces else shellFaces, { backApex, shell + k, shell + k1 })
 	end
-	local plastron = b:Mesh("Plastron", vertices, plastronFaces, "Belly")
-	b:Mesh("ShellRim", vertices, rimFaces, SHELL_RIM)
-	b:Mesh("Shell", vertices, shellFaces, "Accent")
+	local plates = { Thickness = 0.08 }
+	local plastron = b:Mesh("Plastron", vertices, plastronFaces, "Belly", plates)
+	b:Mesh("ShellRim", vertices, rimFaces, SHELL_RIM, plates)
+	b:Mesh("Shell", vertices, shellFaces, "Accent", plates)
 	if shellAlt then
-		b:Mesh("ShellScute", vertices, altFaces, shellAlt)
+		b:Mesh("ShellScute", vertices, altFaces, shellAlt, plates)
 	end
 	return plastron
 end
 
--- Cannon barrel: a 4-sided antiprism from `back` (hidden in the shell, radius backRadius) to `muzzle`
--- (radius), whose mouth folds inwards into a dark funnel. 12 triangles.
-local function barrel(b, name: string, back: Vector3, muzzle: Vector3, backRadius: number, radius: number, color: any, holeColor: any)
+-- Cannon barrel: an antiprism (`sides` vertices per ring) from `back` (hidden in the shell, radius backRadius; 0 =
+-- a point, cheaper) to `muzzle` (radius), whose mouth folds inwards into a dark funnel.
+local function barrel(
+	b,
+	name: string,
+	back: Vector3,
+	muzzle: Vector3,
+	backRadius: number,
+	radius: number,
+	sides: number,
+	color: any,
+	holeColor: any
+)
 	local dir = (muzzle - back).Unit
 	local up = (UP - dir * UP:Dot(dir)).Unit
 	local right = dir:Cross(up)
 	local vertices = {}
 	for ringIndex, point in { back, muzzle } do
 		local r = if ringIndex == 1 then backRadius else radius
-		for k = 0, 3 do
-			local a = (k + (ringIndex - 1) * 0.5 + 0.5) * TAU / 4
+		for k = 0, sides - 1 do
+			local a = (k + (ringIndex - 1) * 0.5 + 0.25) * TAU / sides
 			table.insert(vertices, point + (right * math.cos(a) + up * math.sin(a)) * r)
 		end
 	end
 	table.insert(vertices, muzzle - dir * radius * 0.9)
-	local sides, hole = {}, {}
-	for k = 1, 4 do
-		local k1 = k % 4 + 1
-		table.insert(sides, { k, 4 + k, k1 })
-		table.insert(sides, { 4 + k, 4 + k1, k1 })
-		table.insert(hole, { 4 + k, 4 + k1, 9 })
+	local walls, hole = {}, {}
+	for k = 1, sides do
+		local k1 = k % sides + 1
+		if backRadius > 0 then
+			table.insert(walls, { k, sides + k, k1 })
+		end
+		table.insert(walls, { sides + k, sides + k1, k1 })
+		table.insert(hole, { sides + k, sides + k1, 2 * sides + 1 })
 	end
-	b:Mesh(name, vertices, sides, color)
-	b:Mesh(name .. "Hole", vertices, hole, holeColor)
+	b:Mesh(name, vertices, walls, color, { Thickness = THIN })
+	b:Mesh(name .. "Hole", vertices, hole, holeColor, { Thickness = THIN })
 end
 
 -- Small flat triangle on a face (fangs, teeth): base centred at (x, y) on the shape, pointing down (or up).
@@ -125,24 +139,27 @@ local function eyelids(b, head, spacing: number, height: number, size: Vector3, 
 	end
 end
 
--- Ghost hand (built inside a Float bone): faceted palm, three clawed fingers and a jagged cuff.
+-- Ghost hand (built inside a Float bone): a mitten palm, three thick claws spread upwards (a spooky "boo!")
+-- and a jagged cuff trailing towards the body. side = +1 for the right hand.
 local function ghostHand(b, palm: Vector3, side: number, size: number, color: any)
-	local thin = { Thickness = THIN }
-	b:Ball("Palm", V(0.62, 0.56, 0.5) * size, palm, nil, color, { Detail = 0, Thickness = THIN })
-	local fingers = { V(0.12, 0.85, -0.2), V(0.62, 0.62, -0.28), V(0.85, 0.12, -0.22) }
+	b:Ball("Palm", V(0.82, 0.78, 0.52) * size, palm, nil, color, { Detail = 0 })
+	local fingers = { V(0.62, 0.78, -0.2), V(0.08, 1.05, -0.25), V(-0.42, 0.82, -0.2) }
 	for index, offset in fingers do
 		local dir = V(offset.X * side, offset.Y, offset.Z)
-		b:Spike("Finger" .. index, palm + dir.Unit * 0.1 * size, palm + dir * size, 0.24 * size, 0.2 * size, color, thin)
+		b:Spike("Finger" .. index, palm + dir * 0.25 * size, palm + dir * 1.12 * size, 0.38 * size, 0.3 * size, color, nil, V(0, 0, -1))
 	end
-	b:Spike(
-		"Cuff",
-		palm + V(-side * 0.12, -0.05, 0.05) * size,
-		palm + V(-side * 0.62, -0.3, 0.2) * size,
-		0.5 * size,
-		0.3 * size,
-		color,
-		thin
-	)
+	for index, y in { 0.12, -0.18 } do
+		b:Spike(
+			"Cuff" .. index,
+			palm + V(-0.2 * side, y, 0.05) * size,
+			palm + V(-0.75 * side, y * 2.2 - 0.12, 0.12) * size,
+			0.34 * size,
+			0.05,
+			color,
+			{ Thickness = THIN },
+			V(0, 0, -1)
+		)
+	end
 end
 
 --[[
@@ -150,14 +167,16 @@ end
 	  HalfWidth, Top, Bottom: the corners are at x = +-HalfWidth, the top / bottom edges at y = Top / Bottom in
 	    the middle; Curl: how much both edges rise towards the pointed corners.
 	  Gap: two strips of teeth with a dark line Gap wide between them; nil = one strip.
-	  Color (default White), Columns (default 5: 6 triangles per strip; 3: 2 triangles).
+	  Color (default White), Columns (default 5: 6 triangles per strip; 3: 2 triangles), Lift (how far the strip
+	  floats off the surface, default 0.04: raise it on coarse shapes so the flat triangles do not sink in).
 ]]
 local function grin(b, head, options)
 	local halfWidth, top, bottom, curl = options.HalfWidth, options.Top, options.Bottom, options.Curl
 	local color = options.Color or "White"
 	local count = options.Columns or 5
+	local lift = options.Lift or 0.04
 	local function point(x: number, y: number): Vector3
-		return (b:OnSurface(head, x, y) * CFrame.new(0, 0, -0.04)).Position
+		return (b:OnSurface(head, x, y) * CFrame.new(0, 0, -lift)).Position
 	end
 	local function strip(name: string, upper: (number) -> number, lower: (number) -> number)
 		local ups, downs = {}, {}
@@ -261,31 +280,89 @@ local function loft(
 	return { Part = handle.Part, Center = handle.Center, Size = handle.Size, Tris = tris }
 end
 
--- Feathered fan (ears, frills): triangles from `apex` (raised outwards) to each edge of the outline polygon,
--- so the jagged outline reads from the front and from the side. #outline triangles.
-local function fan(b, name: string, apex: Vector3, outline: { Vector3 }, color: any)
-	local vertices = table.clone(outline)
-	table.insert(vertices, apex)
-	local faces = {}
-	for i = 1, #outline do
-		table.insert(faces, { #vertices, i, i % #outline + 1 })
+--[[
+	Serpent body: an antiprism tube (`Sides` vertices per ring, default 4, successive rings turned by half a step
+	so every facet is a triangle) through `points`, one radius per point. The rings are oriented by `dorsal` (the
+	direction of the back: one Vector3, or one per point): the facets facing away from it take `bellyColor`, the
+	others `color`. Each segment is its own convex mesh so its facets lie exactly on the surface. options:
+	  Sides (default 4), Twist (extra ring turn in steps: 0 = a zig-zag of single belly facets, 0.25 = a continuous
+	  two-facet belly band), CapStart / CapEnd (pointed cap length as a fraction of the end radius; nil = open end
+	  hidden in another shape), BellyCut (cosine threshold of the belly facets, default 0.6).
+	Returns a handle covering the whole body (centre = middle point).
+]]
+local function serpent(b, name: string, points: { Vector3 }, radii: { number }, dorsal: any, color: any, bellyColor: any, options: any?)
+	local opts = options or {}
+	local sides = opts.Sides or 4
+	local cut = opts.BellyCut or 0.6
+	local count = #points
+	-- one dorsal direction for the whole body, or a list with one per point
+	local perPoint = type(dorsal) == "table" and rawget(dorsal, 1) ~= nil
+	local rings, ups, tangents = {}, {}, {}
+	for i = 1, count do
+		local t = (points[math.min(count, i + 1)] - points[math.max(1, i - 1)]).Unit
+		local d = if perPoint then dorsal[i] else dorsal
+		local u = (d - t * d:Dot(t)).Unit
+		local v = t:Cross(u)
+		local ring = {}
+		for k = 0, sides - 1 do
+			local a = (k + (i - 1) * 0.5 + (opts.Twist or 0)) * TAU / sides
+			ring[k + 1] = points[i] + u * (math.cos(a) * radii[i]) + v * (math.sin(a) * radii[i])
+		end
+		rings[i], ups[i], tangents[i] = ring, u, t
 	end
-	return b:Mesh(name, vertices, faces, color, { Thickness = THIN })
-end
 
--- Cream belly plates: downward chevrons lying on the front of a tube, at the given heights.
-local function bellyPlates(b, tube, heights: { number }, width: number)
-	for index, y in heights do
-		local frame = b:OnSurface(tube, 0, y - tube.Center.Y) * CFrame.new(0, 0, -0.03)
-		b:Tri(
-			"BellyPlate" .. index,
-			frame:PointToWorldSpace(V(-width / 2, width * 0.28, 0)),
-			frame:PointToWorldSpace(V(width / 2, width * 0.28, 0)),
-			frame:PointToWorldSpace(V(0, -width * 0.42, 0)),
-			"Belly",
-			{ Thickness = 0.08 }
-		)
+	local tris = {}
+	local function draw(vertices: { Vector3 }, faces: { { number } }, axisA: Vector3, axisB: Vector3, up: Vector3)
+		local axis = (axisB - axisA).Unit
+		local belly = -up
+		local groups, order = {}, {}
+		for _, face in faces do
+			local centroid = (vertices[face[1]] + vertices[face[2]] + vertices[face[3]]) / 3
+			local out = centroid - (axisA + axisB) / 2
+			out -= axis * out:Dot(axis)
+			local key = if out.Magnitude > 1e-6 and out.Unit:Dot(belly) > cut then bellyColor else color
+			if not groups[key] then
+				groups[key] = {}
+				table.insert(order, key)
+			end
+			table.insert(groups[key], face)
+		end
+		for _, key in order do
+			local handle = b:Mesh(name, vertices, groups[key], key)
+			for _, triangle in handle.Tris do
+				table.insert(tris, triangle)
+			end
+		end
 	end
+
+	for i = 1, count - 1 do
+		local vertices, faces = {}, {}
+		for k = 1, sides do
+			vertices[k] = rings[i][k]
+			vertices[sides + k] = rings[i + 1][k]
+		end
+		for k = 1, sides do
+			local k1 = k % sides + 1
+			table.insert(faces, { k, sides + k, k1 })
+			table.insert(faces, { sides + k, sides + k1, k1 })
+		end
+		draw(vertices, faces, points[i], points[i + 1], (ups[i] + ups[i + 1]).Unit)
+	end
+	for _, cap in { { 1, -1, opts.CapStart }, { count, 1, opts.CapEnd } } do
+		local index, direction, length = cap[1], cap[2], cap[3]
+		if length and radii[index] > 1e-3 then
+			local vertices = table.clone(rings[index])
+			local apex = points[index] + tangents[index] * direction * radii[index] * length
+			table.insert(vertices, apex)
+			local faces = {}
+			for k = 1, sides do
+				table.insert(faces, { sides + 1, k, k % sides + 1 })
+			end
+			draw(vertices, faces, points[index], apex, ups[index])
+		end
+	end
+	local middle = points[math.ceil(count / 2)]
+	return { Part = nil, Center = middle, Size = V(radii[1], radii[1], radii[1]) * 2, Tris = tris }
 end
 
 -- Turtle family ------------------------------------------------------------------------------
@@ -295,95 +372,118 @@ Designs["Puddlet"] = function(b)
 	local torso = turtleTorso(b, V(0, 1.08, 0.05), 1.8, 1.7, 0.6, 0.85, 6, "Extra")
 	b:SetCore(torso)
 
-	-- Stubby feet: flat faceted diamonds sunk into the bottom of the shell.
-	b:MirrorBone("Leg", V(0.5, 0.55, 0.0), nil, function()
-		b:Ball("Foot", V(0.8, 0.62, 1.0), V(0.5, 0.31, -0.14), nil, "Body", { Detail = 0, Thickness = THIN })
+	-- Stubby feet tucked under the shell.
+	b:MirrorBone("Leg", V(0.45, 0.5, 0.0), nil, function()
+		b:Ball("Foot", V(0.72, 0.52, 0.98), V(0.47, 0.26, -0.15), nil, "Body", { Detail = 0, Thickness = THIN })
 	end)
 	b:MirrorBone("Arm", V(0.72, 1.45, -0.05), { Phase = 0.5 }, function()
-		b:Limb("Arm", V(0.5, 1.58, 0.02), V(1.2, 0.98, -0.45), 0.46, "Body", { RingAt = 0.62, Thickness = THIN, Up = OUT })
+		b:Limb("Arm", V(0.5, 1.58, 0.02), V(1.18, 1.0, -0.45), 0.46, "Body", { RingAt = 0.62, Thickness = THIN, Up = OUT })
 	end)
 
 	b:Bone("Head", V(0, 1.8, -0.05), nil, function()
 		local head = b:Ball("Head", V(2.15, 1.85, 1.85), V(0, 2.66, -0.18), nil, "Body")
 		b:Eyes(head, 0.46, 0.12, V(0.5, 0.62, 0.26), TURTLE_EYE)
 		-- Cheerful open smile.
-		grin(b, head, { HalfWidth = 0.46, Top = -0.32, Bottom = -0.56, Curl = 0.16, Color = "Mouth" })
-		b:FaceDot("Tongue", head, 0, -0.5, V(0.22, 0.12, 0.06), "Tongue")
+		grin(b, head, { HalfWidth = 0.46, Top = -0.32, Bottom = -0.58, Curl = 0.16, Color = "Mouth", Lift = 0.06 })
 	end)
 
-	-- Curly tail: comes out under the shell, sweeps back and hooks up.
-	b:Bone("Tail", V(0, 0.68, 0.6), nil, function()
-		b:Tube("Tail", { V(0, 0.75, 0.25), V(0, 0.5, 1.25), V(0, 1.42, 1.48) }, { 0, 0.36, 0 }, "Body", { Thickness = THIN })
+	-- Curly tail: comes out under the shell, sweeps back and curls up into a hook.
+	b:Bone("Tail", V(0, 0.7, 0.6), nil, function()
+		b:Tube("Tail", { V(0, 0.72, 0.45), V(0, 0.58, 1.3), V(0, 1.0, 1.75) }, { 0, 0.34, 0 }, "Body", { Thickness = THIN })
+		b:Spike("TailCurl", V(0, 0.92, 1.62), V(0, 1.6, 1.3), 0.46, 0.4, "Body", { Thickness = THIN }, V(0, 0.3, 1))
 	end)
 end
 
--- Bigger turtle: feathery white ears curling back and a big fluffy white tail curling like a wave.
+-- Bigger turtle: feathery white ears curling back, two little fangs, a big fluffy white tail curling like a wave.
 Designs["Shellwave"] = function(b)
 	local torso = turtleTorso(b, V(0, 1.42, 0.05), 1.95, 2.05, 0.65, 0.95, 6)
 	b:SetCore(torso)
 
-	b:MirrorBone("Leg", V(0.55, 0.8, 0.0), nil, function()
-		b:Ball("Foot", V(0.82, 0.86, 1.05), V(0.56, 0.43, -0.12), nil, "Body", { Detail = 0, Thickness = THIN })
+	b:MirrorBone("Leg", V(0.5, 0.75, 0.0), nil, function()
+		b:Ball("Foot", V(0.84, 0.68, 1.12), V(0.5, 0.34, -0.15), nil, "Body", { Detail = 0, Thickness = THIN })
 	end)
 	b:MirrorBone("Arm", V(0.78, 1.88, -0.05), { Phase = 0.5 }, function()
-		b:Limb("Arm", V(0.55, 1.98, 0.02), V(1.32, 1.3, -0.48), 0.46, "Body", { RingAt = 0.62, Thickness = THIN, Up = OUT })
+		b:Limb("Arm", V(0.55, 1.98, 0.02), V(1.32, 1.3, -0.5), 0.5, "Body", { RingAt = 0.62, Thickness = THIN, Up = OUT })
 	end)
 
 	b:Bone("Head", V(0, 2.28, -0.05), nil, function()
-		local head = b:Ball("Head", V(1.9, 1.7, 1.75), V(0, 3.0, -0.2), nil, "Body")
-		b:Eyes(head, 0.4, 0.1, V(0.44, 0.54, 0.25), TURTLE_EYE)
-		b:Mouth(head, -0.38, 0.42)
-		-- Feathery ears: white fans sweeping out and back, with a curled tip and a lower lobe.
+		local head = b:Ball("Head", V(1.95, 1.75, 1.8), V(0, 3.0, -0.2), nil, "Body")
+		b:Eyes(head, 0.4, 0.1, V(0.44, 0.56, 0.25), TURTLE_EYE)
+		b:Mouth(head, -0.36, 0.48)
+		fang(b, head, -0.2, -0.38, 0.12, 0.15)
+		fang(b, head, 0.2, -0.38, 0.12, 0.15)
+		-- Feathery ears: a big white feather sweeping up, out and back, its tip curling backwards.
 		b:MirrorBone("Ear", V(0.6, 3.45, 0.0), nil, function()
-			-- outline: base (in the head), tip, curl, notch, lower lobe, base
-			fan(b, "Ear", V(1.12, 3.92, 0.12), {
-				V(0.5, 3.62, -0.15),
-				V(1.42, 4.6, 0.45),
-				V(1.88, 4.12, 0.98),
-				V(1.3, 3.92, 0.55),
-				V(1.72, 3.38, 0.78),
-				V(0.62, 3.22, 0.12),
-			}, "Extra")
+			b:Spike("Ear", V(0.5, 3.35, 0.0), V(1.45, 4.6, 0.55), 1.0, 0.6, "Extra", { Thickness = THIN }, V(0.4, 0.3, -1))
+			b:Blade("EarCurl", V(1.25, 4.38, 0.45), V(1.8, 4.1, 1.0), 0.55, "Extra", { Thickness = 0.08 }, V(0.6, 0.3, -1))
 		end)
 	end)
 
-	-- Fluffy tail: a thick white curl, like a breaking wave.
-	b:Bone("Tail", V(0, 0.95, 0.85), nil, function()
+	-- Fluffy tail: a thick white curl like a breaking wave, with a feathery tuft on its back.
+	b:Bone("Tail", V(0, 1.0, 0.85), nil, function()
 		b:Tube(
 			"Tail",
-			{ V(0, 1.0, 0.5), V(0, 1.05, 1.45), V(0, 2.25, 1.9), V(0, 2.75, 1.2) },
-			{ 0, 0.55, 0.45, 0 },
+			{ V(0, 0.95, 0.55), V(0, 1.05, 1.5), V(0, 2.05, 2.0), V(0, 2.75, 1.4) },
+			{ 0, 0.55, 0.5, 0 },
 			"Extra",
 			{ Thickness = THIN }
 		)
+		b:Blade("TailTuft", V(0, 1.55, 1.95), V(0, 1.35, 2.65), 0.6, "Extra", { Thickness = 0.08 }, SIDE)
 	end)
 end
 
--- Huge armoured turtle with twin water cannons coming out of its shell over the shoulders.
+-- Huge armoured turtle with twin water cannons coming out of its shell over the shoulders, thick clawed limbs.
 Designs["Cannontoise"] = function(b)
 	local torso = turtleTorso(b, V(0, 1.85, 0.12), 2.7, 2.8, 0.85, 1.1, 6)
 	b:SetCore(torso)
 
-	b:MirrorBone("Leg", V(0.8, 1.15, 0.05), nil, function()
-		b:Ball("Foot", V(1.05, 1.2, 1.3), V(0.82, 0.6, -0.12), nil, "Body", { Detail = 0, Thickness = THIN })
+	-- Heavy feet with two white claws.
+	b:MirrorBone("Leg", V(0.72, 1.0, 0.05), nil, function()
+		b:Ball("Foot", V(1.05, 0.88, 1.35), V(0.74, 0.44, -0.15), nil, "Body", { Detail = 0, Thickness = THIN })
+		for index, x in { -0.2, 0.2 } do
+			b:Spike(
+				"Claw" .. index,
+				V(0.74 + x, 0.26, -0.62),
+				V(0.74 + x * 1.25, 0.12, -1.0),
+				0.26,
+				0.05,
+				"White",
+				{ Thickness = THIN },
+				UP
+			)
+		end
 	end)
+	-- Thick arms ending in clawed fists.
 	b:MirrorBone("Arm", V(1.15, 2.55, -0.1), { Phase = 0.5 }, function()
-		b:Limb("Arm", V(0.85, 2.7, 0.0), V(1.85, 1.72, -0.62), 0.8, "Body", { RingAt = 0.58, Thickness = THIN, Up = OUT })
+		b:Limb("Arm", V(0.85, 2.72, 0.0), V(1.9, 1.62, -0.7), 0.88, "Body", { RingAt = 0.55, Thickness = THIN, Up = OUT })
+		for index, offset in { V(-0.18, 0.05, 0), V(0.12, -0.1, 0) } do
+			b:Spike(
+				"Claw" .. index,
+				V(1.72, 1.78, -0.62) + offset,
+				V(1.8, 1.55, -1.02) + offset * 1.3,
+				0.24,
+				0.05,
+				"White",
+				{ Thickness = THIN },
+				V(0, 0.4, -1)
+			)
+		end
 	end)
 
+	-- Water cannons: grey barrels from inside the shell, pointing forward over the shoulders.
 	for _, side in { -1, 1 } do
-		barrel(b, "Cannon", V(side * 0.62, 2.55, 0.55), V(side * 0.88, 3.08, -1.05), 0.2, 0.34, "Extra", "Dark")
+		barrel(b, "Cannon", V(side * 0.32, 2.3, 0.3), V(side * 1.08, 3.05, -1.05), 0, 0.37, 5, "Extra", "Dark")
 	end
 
 	b:Bone("Head", V(0, 3.0, -0.25), nil, function()
-		local head = b:Ball("Head", V(1.75, 1.45, 1.6), V(0, 3.6, -0.42), nil, "Body", { Detail = 1 })
-		b:Eyes(head, 0.36, 0.1, V(0.34, 0.36, 0.22), TURTLE_EYE, "Angry")
+		local head = b:Ball("Head", V(1.8, 1.5, 1.65), V(0, 3.6, -0.42), nil, "Body")
+		b:Eyes(head, 0.37, 0.1, V(0.36, 0.38, 0.22), TURTLE_EYE, "Angry")
 		b:Mouth(head, -0.38, 0.55)
-		b:MirrorSpike("Ear", V(0.45, 4.05, -0.38), V(0.8, 4.7, -0.25), 0.42, 0.3, "Body", { Thickness = THIN }, V(0, 0, -1))
+		b:MirrorSpike("Ear", V(0.45, 4.0, -0.4), V(0.78, 4.55, -0.3), 0.42, 0.08, "Body", { Thickness = 0.08 }, V(0.3, 0, -1))
 	end)
 
 	b:Bone("Tail", V(0, 0.95, 1.0), nil, function()
-		b:Cone("Tail", V(0, 1.0, 0.85), V(0, 0.45, 1.75), 0.32, "Body", { Thickness = THIN })
+		b:Spike("Tail", V(0, 0.95, 0.85), V(0, 0.42, 1.8), 0.7, 0.1, "Body", { Thickness = 0.1 }, UP)
 	end)
 end
 
@@ -429,41 +529,45 @@ Designs["Ghastling"] = function(b)
 	b:Particles(ball, GAS, 5, 0.5)
 end
 
--- Floating ghost head with a spiky crown, a wide dark grin, a wispy tail and two detached clawed hands.
+-- Floating ghost head with a spiky crown, a wide dark grin with the tongue out, a wispy tail and two detached
+-- clawed hands.
 Designs["Hauntling"] = function(b)
 	b.Hover = 1.5
-	local body = b:Ball("Body", V(2.5, 2.15, 1.9), V(0, 2.4, 0), nil, "Body")
+	local body = b:Ball("Body", V(2.6, 2.2, 2.0), V(0, 2.45, 0), nil, "Body")
 	b:SetCore(body)
 
-	-- Spiky crown: two big horns and two side spikes (ear bones that twitch), a tuft at the back.
-	b:MirrorBone("Ear", V(0.7, 3.1, 0.1), nil, function()
-		b:Spike("Horn", V(0.5, 3.0, 0.1), V(1.4, 4.4, 0.35), 0.9, 0.5, "Body", { Thickness = THIN })
-		b:Spike("SideSpike", V(0.95, 2.55, 0.15), V(1.95, 2.95, 0.55), 0.62, 0.4, "Body", { Thickness = THIN })
+	-- Spiky crown: two big horns sweeping up and out and two side points (ear bones that twitch), a tuft at the back.
+	b:MirrorBone("Ear", V(0.7, 3.15, 0.1), nil, function()
+		b:Spike("Horn", V(0.45, 3.0, 0.1), V(1.45, 4.55, 0.4), 0.95, 0.5, "Body", { Thickness = THIN })
+		b:Spike("SideSpike", V(1.0, 2.6, 0.15), V(2.1, 3.05, 0.55), 0.7, 0.1, "Body", { Thickness = THIN }, V(0, 0.3, -1))
 	end)
-	b:Spike("Tuft", V(0, 3.15, 0.4), V(0, 3.75, 1.2), 0.85, 0.45, "Body", { Thickness = THIN }, UP)
+	b:Spike("Tuft", V(0, 3.2, 0.45), V(0, 3.9, 1.3), 0.95, 0.1, "Body", { Thickness = THIN }, UP)
 
 	-- Wispy tail: the body thins into a curling point below.
 	b:Bone("Tail", V(0, 1.7, 0.2), nil, function()
-		b:Tube(
-			"Tail",
-			{ V(0, 2.2, 0.1), V(0, 1.45, 0.25), V(0.3, 0.75, 0.55), V(1.0, 0.35, 1.2) },
-			{ 0, 0.72, 0.42, 0 },
-			"Body",
-			{ Thickness = THIN }
-		)
+		b:Tube("Tail", { V(0, 2.2, 0.1), V(0, 1.45, 0.25), V(0.3, 0.75, 0.55), V(1.0, 0.35, 1.2) }, { 0, 0.75, 0.42, 0 }, "Body")
 	end)
 
-	local eye = V(0.6, 0.44, 0.25)
-	b:Eyes(body, 0.5, 0.3, eye, GHOST_EYE, "Angry")
-	-- Wide dark grin with the tongue sticking out in the middle.
-	grin(b, body, { HalfWidth = 0.95, Top = -0.22, Bottom = -0.72, Curl = 0.38, Color = "Mouth" })
-	b:Mouth(body, -0.6, 0.42, true)
+	b:Eyes(body, 0.52, 0.32, V(0.62, 0.46, 0.26), GHOST_EYE, "Angry")
+	-- Wide dark grin with a big pink tongue hanging out.
+	grin(b, body, { HalfWidth = 0.95, Top = -0.18, Bottom = -0.75, Curl = 0.4, Color = "Mouth", Columns = 7, Lift = 0.1 })
+	local tongue = b:OnSurface(body, 0.18, -0.62)
+	b:Spike(
+		"Tongue",
+		tongue.Position + V(0, 0.06, -0.12),
+		tongue.Position + V(0.06, -0.5, -0.3),
+		0.36,
+		0.1,
+		"Tongue",
+		{ Thickness = 0.08 },
+		V(0, 0.4, -1)
+	)
 
-	b:Bone("FloatHandR", V(1.85, 2.0, -0.6), { Phase = 0 }, function()
-		ghostHand(b, V(1.85, 2.0, -0.6), 1, 1.25, "Body")
+	b:Bone("FloatHandR", V(1.95, 2.15, -0.7), { Phase = 0 }, function()
+		ghostHand(b, V(1.95, 2.15, -0.7), 1, 1.2, "Body")
 	end)
-	b:Bone("FloatHandL", V(-1.85, 2.0, -0.6), { Phase = 0.5 }, function()
-		ghostHand(b, V(-1.85, 2.0, -0.6), -1, 1.25, "Body")
+	b:Bone("FloatHandL", V(-1.95, 2.15, -0.7), { Phase = 0.5 }, function()
+		ghostHand(b, V(-1.95, 2.15, -0.7), -1, 1.2, "Body")
 	end)
 	b:Particles(body, GAS, 4, 0.5)
 end
@@ -493,16 +597,17 @@ Designs["Gloomer"] = function(b)
 	b:Spike("BackSpike", V(0, 2.75, 0.75), V(0, 3.5, 1.55), 0.75, 0.45, "Body", { Thickness = THIN }, UP)
 	b:MirrorSpike("Spike1", V(0.6, 2.6, 0.8), V(1.1, 3.15, 1.7), 0.7, 0.45, "Body", { Thickness = THIN })
 	b:MirrorSpike("Spike2", V(1.0, 2.05, 0.85), V(1.75, 2.35, 1.65), 0.7, 0.45, "Body", { Thickness = THIN })
-	b:MirrorSpike("Spike3", V(1.05, 1.35, 0.85), V(1.7, 1.2, 1.6), 0.6, 0.4, "Body", { Thickness = THIN })
+	b:MirrorSpike("Spike3", V(1.05, 1.35, 0.85), V(1.75, 1.15, 1.6), 0.65, 0.1, "Body", { Thickness = 0.08 }, V(1, 0, -0.3))
 
 	b:Bone("Tail", V(0, 0.8, 1.0), nil, function()
 		b:Spike("Tail", V(0, 0.9, 0.9), V(0, 0.5, 1.85), 0.6, 0.45, "Body", { Thickness = THIN }, UP)
 	end)
 
 	b:Eyes(body, 0.6, 0.38, V(0.62, 0.4, 0.25), GLOOM_EYE, "Angry")
-	-- Wide toothy grin curling up at both ends: two white crescents of triangles (upper and lower teeth)
-	-- lying on the face, the dark body showing between them.
-	grin(b, body, { HalfWidth = 1.12, Top = -0.3, Bottom = -0.88, Curl = 0.42, Gap = 0.05 })
+	-- Wide toothy grin curling up at both ends: a dark crescent with two white crescents of triangles on it (upper
+	-- and lower teeth), the dark mouth showing between them.
+	grin(b, body, { HalfWidth = 1.16, Top = -0.26, Bottom = -0.92, Curl = 0.44, Color = "Mouth", Lift = 0.05 })
+	grin(b, body, { HalfWidth = 1.08, Top = -0.31, Bottom = -0.86, Curl = 0.42, Gap = 0.09, Lift = 0.1 })
 	b:Particles(body, GAS, 4, 0.5)
 end
 
@@ -556,68 +661,118 @@ Designs["Flopfish"] = function(b)
 	end)
 end
 
--- Furious sea serpent rearing over its own coil, jaws wide open, crest raised.
+-- Furious sea serpent rearing over its own coil, jaws wide open, crest raised: blue back, cream belly band,
+-- white fins and whiskers. Hovers; the coil and the tail are two nested tail bones, the neck sways the head.
 Designs["Tidewyrm"] = function(b)
 	b.Hover = 1.2
-	-- Chest and belly (body), then the coil and the tail in two nested tail bones, the neck in its own bone.
-	local core = b:Tube(
+	local fin = { Thickness = 0.07 }
+	local scutes = { Twist = 0.25 }
+	-- Chest: rises from the coil, S-curved, belly to the front.
+	local chest = serpent(
+		b,
 		"Body",
-		{ V(0, 3.55, 0.2), V(0, 2.55, 0.05), V(0.15, 1.6, -0.35), V(0.6, 0.98, 0.15) },
-		{ 0.72, 0.8, 0.82, 0.75 },
-		"Body"
+		{ V(0.5, 0.72, -0.3), V(0, 1.5, -0.62), V(0, 2.6, -0.42), V(0, 3.55, 0.12) },
+		{ 0.7, 0.76, 0.76, 0.7 },
+		{ V(0.4, 0.8, 0.5), V(0, 0.25, 1), V(0, 0, 1), V(0, -0.3, 1) },
+		"Body",
+		"Belly",
+		scutes
 	)
-	b:SetCore(core)
-	bellyPlates(b, core, { 3.2, 2.7, 2.2, 1.7 }, 0.55)
-	b:Spike("Dorsal1", V(0, 3.0, 0.45), V(0, 3.4, 1.4), 0.8, 0.1, "Accent", { Thickness = 0.08 }, SIDE)
-	b:Spike("Dorsal2", V(0.05, 2.0, 0.25), V(0.1, 2.2, 1.2), 0.75, 0.1, "Accent", { Thickness = 0.08 }, SIDE)
+	b:SetCore(chest)
+	b:Blade("Dorsal1", V(0, 2.4, 0.15), V(0, 2.8, 1.05), 0.85, "Accent", fin, SIDE)
+	b:Blade("Dorsal2", V(0, 1.4, -0.05), V(0, 1.55, 0.95), 0.75, "Accent", fin, SIDE)
 
-	b:Bone("Tail", V(0.6, 0.98, 0.15), { Amp = 0.6 }, function()
-		b:Tube("Coil", { V(0.45, 1.05, 0.0), V(1.15, 0.8, 0.8), V(0.65, 1.0, 1.55) }, { 0, 0.68, 0.55 }, "Body")
-		b:Spike("Dorsal3", V(1.3, 1.1, 0.75), V(2.0, 1.6, 1.3), 0.65, 0.1, "Accent", { Thickness = 0.08 }, V(1, 0, -0.6))
-		b:Bone("Tail2", V(0.65, 1.0, 1.55), { Phase = 0.2 }, function()
-			b:Tube("TailEnd", { V(0.85, 0.95, 1.4), V(-0.2, 1.45, 1.85), V(-0.85, 2.35, 1.7) }, { 0, 0.45, 0 }, "Body")
+	-- Coil lying under the chest (right, back), then the tail rising on the left with its three-pronged fin.
+	b:Bone("Tail", V(0.5, 0.72, -0.3), { Amp = 0.45 }, function()
+		serpent(
+			b,
+			"Coil",
+			{ V(0.5, 0.72, -0.3), V(1.2, 0.55, 0.7), V(-0.2, 0.55, 1.55) },
+			{ 0.7, 0.6, 0.48 },
+			UP,
+			"Body",
+			"Belly",
+			{ Sides = 3 }
+		)
+		b:Blade("Dorsal3", V(1.1, 0.85, 0.55), V(1.8, 1.35, 1.1), 0.7, "Accent", fin, V(1, 0, -0.5))
+		b:Bone("Tail2", V(-0.2, 0.55, 1.55), { Phase = 0.2 }, function()
+			serpent(
+				b,
+				"TailEnd",
+				{ V(-0.2, 0.55, 1.55), V(-1.2, 1.05, 1.15), V(-1.45, 2.2, 0.85) },
+				{ 0.48, 0.34, 0 },
+				V(-0.3, 0.5, 1),
+				"Body",
+				"Belly",
+				{ Sides = 3 }
+			)
 			-- Three-pronged tail fin.
-			local base = V(-0.75, 2.2, 1.72)
-			local facing = V(1, 0, 0.4)
-			b:Spike("TailFin1", base, V(-0.75, 3.4, 2.05), 0.55, 0.1, "Accent", { Thickness = 0.08 }, facing)
-			b:Spike("TailFin2", base, V(-1.6, 3.05, 1.95), 0.55, 0.1, "Accent", { Thickness = 0.08 }, facing)
-			b:Spike("TailFin3", base, V(-1.75, 2.25, 1.6), 0.5, 0.1, "Accent", { Thickness = 0.08 }, facing)
+			local base = V(-1.42, 2, 0.88)
+			local facing = V(1, 0, 0.5)
+			b:Blade("TailFin1", base, V(-1.45, 3.3, 1.15), 0.6, "Accent", fin, facing)
+			b:Blade("TailFin2", base, V(-2.3, 2.9, 1.25), 0.55, "Accent", fin, facing)
+			b:Blade("TailFin3", base, V(-0.75, 2.95, 0.45), 0.5, "Accent", fin, facing)
 		end)
 	end)
 
 	-- Neck (sways slowly) carrying the big head.
-	b:Bone("Neck", V(0, 3.5, 0.2), { Role = "Tail", Amp = 0.3 }, function()
-		local neck = b:Tube("Neck", { V(0, 3.15, 0.2), V(0, 4.3, 0.2), V(0, 5.05, -0.55) }, { 0, 0.68, 0.6 }, "Body")
-		bellyPlates(b, neck, { 4.3, 3.8 }, 0.5)
-		b:Spike("DorsalNeck", V(0, 4.25, 0.5), V(0, 4.85, 1.4), 0.78, 0.1, "Accent", { Thickness = 0.08 }, SIDE)
+	b:Bone("Neck", V(0, 3.1, 0.1), { Role = "Tail", Amp = 0.3 }, function()
+		serpent(
+			b,
+			"Neck",
+			{ V(0, 2.85, 0.02), V(0, 3.95, 0.18), V(0, 4.6, -0.45) },
+			{ 0.72, 0.64, 0.56 },
+			{ V(0, -0.2, 1), V(0, 0.2, 1), V(0, 1, 0.6) },
+			"Body",
+			"Belly",
+			scutes
+		)
+		b:Blade("DorsalNeck", V(0, 3.8, 0.6), V(0, 4.35, 1.45), 0.85, "Accent", fin, SIDE)
 
-		b:Bone("Head", V(0, 5.0, -0.6), nil, function()
-			local skull = b:Ball("Head", V(2.05, 1.6, 1.9), V(0, 5.58, -1.05), nil, "Body")
-			-- Upper jaw: a wide snout with the ridge on top, red palate underneath, two fangs.
-			b:Spike("UpperJaw", V(0, 5.3, -1.05), V(0, 5.12, -2.7), 1.75, 0.85, "Body", { Thickness = THIN }, UP)
-			b:Tri("Palate", V(-0.68, 5.06, -1.1), V(0.68, 5.06, -1.1), V(0, 5.02, -2.38), "Mouth", { Thickness = 0.06 })
-			for _, x in { -0.36, 0.36 } do
-				b:Tri("Fang", V(x - 0.1, 5.04, -2.08), V(x + 0.1, 5.04, -2.08), V(x * 0.9, 4.56, -2.13), "White", { Thickness = 0.06 })
+		b:Bone("Head", V(0, 4.5, -0.5), nil, function()
+			local skull = b:Ball("Head", V(2.15, 1.7, 2.05), V(0, 5.05, -0.9), nil, "Body")
+			-- Upper jaw: a wide snout with a ridge on top, dark palate underneath, two big fangs.
+			b:Spike("UpperJaw", V(0, 4.83, -1.05), V(0, 4.77, -2.95), 1.95, 0.95, "Body", nil, UP)
+			b:Tri("Palate", V(-0.66, 4.42, -1.3), V(0.66, 4.42, -1.3), V(0, 4.64, -2.6), "Mouth", { Thickness = 0.05 })
+			for _, x in { -0.45, 0.45 } do
+				b:Tri("Fang", V(x - 0.13, 4.53, -2.05), V(x + 0.13, 4.53, -2.05), V(x * 0.92, 3.9, -2.15), "White", { Thickness = 0.06 })
 			end
-			-- Lower jaw (snaps), cream underneath, red tongue, two fangs.
-			b:Bone("Jaw", V(0, 5.0, -1.0), nil, function()
-				b:Spike("LowerJaw", V(0, 4.92, -1.0), V(0, 4.02, -2.38), 1.45, 0.6, "Belly", { Thickness = THIN }, V(0, -1, 0))
-				b:Tri("Tongue", V(-0.45, 4.98, -1.15), V(0.45, 4.98, -1.15), V(0, 4.35, -2.05), "Mouth", { Thickness = 0.06 })
-				for _, x in { -0.34, 0.34 } do
-					b:Tri("Fang", V(x - 0.09, 4.34, -1.98), V(x + 0.09, 4.34, -1.98), V(x * 0.9, 4.74, -2.0), "White", { Thickness = 0.06 })
+			-- Dark throat between the jaws.
+			local throat = b:OnSurface(skull, 0, -0.5)
+			b:Tri(
+				"Throat",
+				throat:PointToWorldSpace(V(-0.42, 0.16, -0.03)),
+				throat:PointToWorldSpace(V(0.42, 0.16, -0.03)),
+				throat:PointToWorldSpace(V(0, -0.4, -0.03)),
+				"Mouth",
+				{ Thickness = 0.05 }
+			)
+			-- Lower jaw (snaps): cream, ridge underneath, red mouth on top, two small fangs.
+			b:Bone("Jaw", V(0, 4.37, -1), nil, function()
+				b:Spike("LowerJaw", V(0, 4.33, -1), V(0, 3.4, -2.3), 1.5, 0.62, "Belly", nil, V(0, -1, 0.3))
+				b:Tri("Tongue", V(-0.52, 4.41, -1.12), V(0.52, 4.41, -1.12), V(0, 3.67, -2.05), "Mouth", { Thickness = 0.06 })
+				for _, x in { -0.38, 0.38 } do
+					b:Tri(
+						"LowFang",
+						V(x - 0.1, 3.85, -1.85),
+						V(x + 0.1, 3.85, -1.85),
+						V(x * 0.92, 4.27, -1.95),
+						"White",
+						{ Thickness = 0.06 }
+					)
 				end
 			end)
-			b:Eyes(skull, 0.56, 0.22, V(0.44, 0.34, 0.22), "Extra", "Angry")
+			b:Eyes(skull, 0.58, 0.22, V(0.48, 0.36, 0.24), WYRM_EYE, "Angry")
 			-- Crest: a tall central prong and two side prongs.
-			b:Spike("Crest", V(0, 6.1, -0.9), V(0, 7.45, -0.25), 0.75, 0.3, "Accent", { Thickness = THIN }, SIDE)
-			b:MirrorSpike("CrestSide", V(0.38, 6.02, -0.85), V(1.02, 6.92, -0.42), 0.52, 0.1, "Accent", { Thickness = THIN }, V(1, 0, -0.4))
+			b:Spike("Crest", V(0, 5.6, -0.85), V(0, 6.7, -0.15), 0.8, 0.32, "Accent", nil, SIDE)
+			b:MirrorBlade("CrestSide", V(0.42, 5.53, -0.75), V(1.1, 6.4, -0.35), 0.5, "Accent", fin, V(1, 0, -0.4))
 			-- Gill fins on the sides of the head.
-			b:MirrorBone("Ear", V(0.85, 5.5, -0.8), nil, function()
-				b:Spike("GillFin", V(0.8, 5.5, -0.82), V(1.85, 5.92, -0.22), 0.78, 0.1, "Accent", { Thickness = THIN }, V(0, 0.5, -1))
+			b:MirrorBone("Ear", V(0.85, 4.9, -0.75), nil, function()
+				b:Blade("GillFin", V(0.78, 4.9, -0.8), V(1.95, 5.3, -0.2), 0.8, "Accent", fin, V(0, 0.5, -1))
 			end)
 			-- Long whiskers from the snout curling backwards.
-			b:MirrorSpike("Whisker", V(0.6, 5.12, -2.0), V(1.38, 5.48, -1.9), 0.13, 0.11, "Accent", { Thickness = THIN })
-			b:MirrorSpike("WhiskerTip", V(1.35, 5.47, -1.9), V(1.9, 4.8, -1.15), 0.11, 0.1, "Accent", { Thickness = THIN })
+			b:MirrorBlade("Whisker", V(0.6, 4.65, -2.1), V(1.45, 5, -2), 0.16, "Accent", fin, V(0, 0, -1))
+			b:MirrorBlade("WhiskerTip", V(1.4, 5.03, -2), V(1.95, 4.2, -1.3), 0.15, "Accent", fin, V(0, 0, -1))
 		end)
 	end)
 end
