@@ -9,6 +9,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
 local Shared = ReplicatedStorage.Shared
+local Economy = require(Shared.Economy)
 local Format = require(Shared.Util.Format)
 local Remotes = require(Shared.Remotes)
 
@@ -133,6 +134,35 @@ function HUDController.Start()
 		UIKit.Corner(12),
 		UIKit.Stroke(UIKit.Colors.Outline, 2),
 	})
+
+	-- Base upgrades (UpgradeController window), with a badge when the next level is affordable.
+	local upgradeButton = menuButton("🏰 Upgrade", Color3.fromRGB(255, 140, 50), 6, function()
+		UIKit.ToggleWindow("Upgrade")
+	end)
+	local upgradeBadge = Create("TextLabel", {
+		Name = "Badge",
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.fromScale(1, 0),
+		Size = UDim2.fromOffset(24, 24),
+		BackgroundColor3 = UIKit.Colors.Green,
+		Font = UIKit.Font,
+		Text = "↑",
+		TextColor3 = Color3.new(1, 1, 1),
+		TextScaled = true,
+		Visible = false,
+		ZIndex = 5,
+		Parent = upgradeButton,
+	}, {
+		UIKit.Corner(12),
+		UIKit.Stroke(UIKit.Colors.Outline, 2),
+	})
+	local function updateUpgradeBadge()
+		local cost = Economy.GetBaseUpgradeCost(Economy.SanitizeBaseLevel(player:GetAttribute("BaseLevel")))
+		upgradeBadge.Visible = cost ~= nil and (player:GetAttribute("Cash") or 0) >= cost
+	end
+	player:GetAttributeChangedSignal("Cash"):Connect(updateUpgradeBadge)
+	player:GetAttributeChangedSignal("BaseLevel"):Connect(updateUpgradeBadge)
+	updateUpgradeBadge()
 
 	-- Server luck banner (top) ----------------------------------------------------
 	local luckBanner = Create("Frame", {

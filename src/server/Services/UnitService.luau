@@ -296,8 +296,8 @@ local function walkToSlot(player: Player, guid: string, runtime: Runtime, model:
 	UnitModelBuilder.SetAnchored(model, false)
 	humanoid.WalkSpeed = GameConfig.Conveyor.DeliverySpeed
 
-	local path = PlotService.GetEntrancePath(plot)
-	table.insert(path, plot.Slots[unit.Slot].GroundPosition)
+	-- Up the ramp, through the gate, then along the aisles to the front of its collect pedestal.
+	local path = PlotService.GetSlotPath(plot, unit.Slot)
 
 	task.spawn(function()
 		local result = Walker.Walk(humanoid, path, token, 120)

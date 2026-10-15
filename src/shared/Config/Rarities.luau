@@ -3,7 +3,8 @@
 	Spawn weights on the conveyor, colours and Robux "instant buy" products.
 	Luck (server luck boost) multiplies the weight of every rarity with LuckAffected = true.
 	Rarities with a timer in GameConfig.RareSpawns (Legendary, Mythic, Secret) are never rolled:
-	ConveyorService spawns them on a public server-wide timer instead (their Weight is 0).
+	ConveyorService spawns them on a public server-wide timer instead. Their Weight is only used
+	if their timer is removed from GameConfig.RareSpawns.Timers.
 ]]
 
 local GameConfig = require(script.Parent.GameConfig)
@@ -39,7 +40,7 @@ Rarities.Info = {
 	},
 	Legendary = {
 		Color = Color3.fromRGB(255, 190, 40),
-		Weight = 0, -- timed spawn (GameConfig.RareSpawns)
+		Weight = 3, -- unused while timed (GameConfig.RareSpawns)
 		Scale = 1.35,
 		LuckAffected = true,
 		Glow = true,
@@ -49,7 +50,7 @@ Rarities.Info = {
 	},
 	Mythic = {
 		Color = Color3.fromRGB(255, 70, 110),
-		Weight = 0, -- timed spawn (GameConfig.RareSpawns)
+		Weight = 0.9, -- unused while timed (GameConfig.RareSpawns)
 		Scale = 1.5,
 		LuckAffected = true,
 		Glow = true,
@@ -59,7 +60,7 @@ Rarities.Info = {
 	},
 	Secret = {
 		Color = Color3.fromRGB(30, 255, 200),
-		Weight = 0, -- timed spawn (GameConfig.RareSpawns)
+		Weight = 0.15, -- unused while timed (GameConfig.RareSpawns)
 		Scale = 1.65,
 		LuckAffected = true,
 		Glow = true,

@@ -57,7 +57,10 @@ function BoostService.AddServerLuck(seconds: number, buyer: Player?)
 	local multiplier = GameConfig.ServerLuck.Multiplier
 	local remaining = Format.Time(endsAt - current)
 	if buyer then
-		Notifier.All(`🍀 {buyer.DisplayName} activated {multiplier}x SERVER LUCK! Rare timers {multiplier}x faster ({remaining})`, "announce")
+		Notifier.All(
+			`🍀 {buyer.DisplayName} activated {multiplier}x SERVER LUCK! Rare timers {multiplier}x faster ({remaining})`,
+			"announce"
+		)
 	else
 		Notifier.All(`🍀 {multiplier}x SERVER LUCK is active! Rare timers {multiplier}x faster ({remaining})`, "announce")
 	end

@@ -4,7 +4,7 @@
 	- "RARE CRITTERS" board (built by ConveyorService, tag "RareSpawnBoard"): countdown to the next
 	  Legendary / Mythic / Secret spawn, progress bars and the Server Luck line.
 	  Spawn times are the attributes of ReplicatedStorage.RareSpawns (server time):
-	  <Rarity> = next spawn, <Rarity>Last = last spawn.
+	  <Rarity> = next spawn, <Rarity>Last = last spawn, <Rarity>From = start of the countdown.
 	Updated twice per second, which also makes "SPAWNING!" blink.
 ]]
 
@@ -63,6 +63,19 @@ local function scan(board: Instance): Board
 	return result
 end
 
+-- Rows can replicate a moment after the board itself, or be replaced if the board streams back in.
+local function needsScan(board: Board, instance: Instance): boolean
+	if #board.Rows < expectedRows then
+		return true
+	end
+	for _, row in board.Rows do
+		if not row.Countdown:IsDescendantOf(instance) then
+			return true
+		end
+	end
+	return false
+end
+
 local function setText(label: TextLabel, text: string, color: Color3)
 	if label.Text ~= text then
 		label.Text = text
@@ -77,6 +90,7 @@ local function updateRow(row: Row, folder: Instance?, now: number, blink: boolea
 	local color = if info then info.Color else WHITE
 	local spawnAt = folder and folder:GetAttribute(row.Rarity)
 	local lastAt = folder and folder:GetAttribute(row.Rarity .. "Last")
+	local fromAt = folder and folder:GetAttribute(row.Rarity .. "From")
 	local fraction = 0
 
 	if type(spawnAt) ~= "number" then
@@ -89,7 +103,9 @@ local function updateRow(row: Row, folder: Instance?, now: number, blink: boolea
 			fraction = 1
 		else
 			setText(row.Countdown, Format.Time(math.ceil(remaining)), if remaining <= URGENT then color else WHITE)
-			fraction = 1 - remaining / RARE.Timers[row.Rarity].Interval
+			-- Share of the current countdown already done (Server Luck makes the bar jump forward).
+			local total = if type(fromAt) == "number" then spawnAt - fromAt else RARE.Timers[row.Rarity].Interval
+			fraction = if total > 0 then 1 - remaining / total else 1
 		end
 	end
 
@@ -125,7 +141,7 @@ local function update(blink: boolean)
 			boards[instance] = nil
 			continue
 		end
-		if #board.Rows < expectedRows then
+		if needsScan(board, instance) then
 			board = scan(instance)
 			boards[instance] = board
 		end

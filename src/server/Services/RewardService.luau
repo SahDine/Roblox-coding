@@ -32,6 +32,11 @@ local function rateLimited(player: Player): boolean
 	return false
 end
 
+-- "Epic" -> "an Epic", "Rare" -> "a Rare"
+local function withArticle(word: string): string
+	return (if string.find(string.lower(string.sub(word, 1, 1)), "[aeiou]") then "an " else "a ") .. word
+end
+
 -- Returns the day number that can be claimed next and when it becomes claimable.
 local function getDailyState(data): (number, number)
 	local last = data.Daily.LastClaim
@@ -68,18 +73,27 @@ local function claimDaily(player: Player): (boolean, string)
 		return false, `Come back in {Format.Time(nextAt - now)}`
 	end
 
-	local cash, rarity = Economy.GetDailyReward(day, UnitService.GetIncomePerSecond(player))
+	local income = UnitService.GetIncomePerSecond(player)
+	local cash, rarity = Economy.GetDailyReward(day, income)
 	data.Daily.LastClaim = now
 	data.Daily.Streak = day
 	CurrencyService.Add(player, cash)
 
-	local message = `Day {day} reward: +{Format.Money(cash)}`
+	-- The streak keeps counting after day 7 but the track starts again at day 1.
+	local cycleDay = ((day - 1) % #DAILY.Rewards) + 1
+	local message = `Day {cycleDay} reward: +{Format.Money(cash)}`
 	if rarity then
 		local def = Units.PickFromRarity(rarity)
 		if def then
 			UnitService.GrantUnit(player, def.Name, "None")
-			message ..= ` and a {rarity} {def.Name}!`
+			message ..= ` and {withArticle(rarity)} {def.Name}`
 		end
+	end
+	message ..= "!"
+	-- Teaser for tomorrow (day 2 is the big jump that brings players back).
+	local nextCash, nextRarity = Economy.GetDailyReward(day + 1, income)
+	if nextRarity or nextCash > cash then
+		message ..= ` Tomorrow: {Format.Money(nextCash)}` .. (if nextRarity then ` + {withArticle(nextRarity)} critter` else "")
 	end
 
 	refreshDailyAttributes(player)

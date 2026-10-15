@@ -47,7 +47,8 @@ export type Slot = {
 	PedestalBase: BasePart,
 	Glow: BasePart,
 	Pad: BasePart, -- glowing button of the collect pedestal
-	PadBase: BasePart, -- stone body of the collect pedestal
+	PadBase: BasePart, -- stone column of the collect pedestal
+	PadCap: BasePart, -- trim cap of the collect pedestal (under the button)
 	PadLabel: TextLabel,
 	StandPosition: Vector3, -- top of the critter pedestal
 	GroundPosition: Vector3, -- floor in front of the collect pedestal (end of the walk home)
@@ -111,6 +112,7 @@ local WALL_HEIGHT = 10
 local GATE_Z = -DEPTH / 2 + 0.75
 local PEDESTAL_TOP = FLOOR_TOP + 1.3
 local COLLECT_OFFSET = 5.7 -- distance from a critter pedestal to its collect pedestal (towards the gate)
+local COLLECT_HEIGHT = 1 -- height of the collect pedestal's column (cap and button on top)
 local RAMP_LENGTH = 7
 local TERRAIN_MARGIN = 4 -- bare ground around the base
 local STATION_Z = -DEPTH / 2 + 8 -- lock button and upgrade station, on each side of the gate plaza
@@ -308,8 +310,14 @@ local function buildTierDecor(plot: Plot, tierIndex: number, palette: Palette): 
 			local function at(x: number, y: number): Vector3
 				return (cframe * anchor * CFrame.new(x, y, -0.15)).Position
 			end
-			part({ Name = "BannerRod", Size = Vector3.new(4.2, 0.3, 0.3), Color = palette.Trim, Material = palette.TrimMaterial }, anchor * CFrame.new(0, 0.1, -0.25))
-			part({ Name = "BannerCloth", Size = Vector3.new(3.4, 5, 0.12), Color = color, Material = Enum.Material.Fabric }, anchor * CFrame.new(0, -2.5, -0.15))
+			part(
+				{ Name = "BannerRod", Size = Vector3.new(4.2, 0.3, 0.3), Color = palette.Trim, Material = palette.TrimMaterial },
+				anchor * CFrame.new(0, 0.1, -0.25)
+			)
+			part(
+				{ Name = "BannerCloth", Size = Vector3.new(3.4, 5, 0.12), Color = color, Material = Enum.Material.Fabric },
+				anchor * CFrame.new(0, -2.5, -0.15)
+			)
 			-- Swallowtail: two right triangles (one wedge each).
 			LowPoly.Triangle(at(-1.7, -5), at(-1.7, -6.6), at(0, -5), facets("BannerTail", color, Enum.Material.Fabric, 0.12), folder)
 			LowPoly.Triangle(at(1.7, -5), at(0, -5), at(1.7, -6.6), facets("BannerTail", color, Enum.Material.Fabric, 0.12), folder)
@@ -360,7 +368,10 @@ local function buildTierDecor(plot: Plot, tierIndex: number, palette: Palette): 
 	if tierIndex >= 4 then
 		local signTop = SIGN_Y + SIGN_SIZE.Y / 2
 		local z = GATE_Z - 1.2
-		part({ Name = "CrownBand", Size = Vector3.new(8.4, 1.3, 0.8), Color = GOLD, Material = Enum.Material.Foil }, CFrame.new(0, signTop + 0.65, z))
+		part(
+			{ Name = "CrownBand", Size = Vector3.new(8.4, 1.3, 0.8), Color = GOLD, Material = Enum.Material.Foil },
+			CFrame.new(0, signTop + 0.65, z)
+		)
 		for spike, height in { 1.8, 2.5, 3.2, 2.5, 1.8 } do
 			local x = (spike - 3) * 1.65
 			local baseY = signTop + 1.3
@@ -381,8 +392,14 @@ local function buildTierDecor(plot: Plot, tierIndex: number, palette: Palette): 
 		end
 
 		local poleBase = FLOOR_TOP + WALL_HEIGHT + 0.7
-		part({ Name = "RoyalPole", Size = Vector3.new(0.5, 15, 0.5), Color = GOLD, Material = Enum.Material.Foil }, CFrame.new(0, poleBase + 7.5, DEPTH / 2 - 0.75))
-		part({ Name = "RoyalPoleTip", Size = Vector3.new(1, 1, 1), Color = GOLD, Material = Enum.Material.Neon }, CFrame.new(0, poleBase + 15.3, DEPTH / 2 - 0.75) * CFrame.Angles(math.rad(45), 0, math.rad(45)))
+		part(
+			{ Name = "RoyalPole", Size = Vector3.new(0.5, 15, 0.5), Color = GOLD, Material = Enum.Material.Foil },
+			CFrame.new(0, poleBase + 7.5, DEPTH / 2 - 0.75)
+		)
+		part(
+			{ Name = "RoyalPoleTip", Size = Vector3.new(1, 1, 1), Color = GOLD, Material = Enum.Material.Neon },
+			CFrame.new(0, poleBase + 15.3, DEPTH / 2 - 0.75) * CFrame.Angles(math.rad(45), 0, math.rad(45))
+		)
 		LowPoly.Triangle(
 			point(0, poleBase + 14.6, DEPTH / 2 - 0.75),
 			point(0, poleBase + 9.4, DEPTH / 2 - 0.75),
@@ -555,7 +572,10 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 		local size = if alongX then Vector3.new(length, WALL_HEIGHT, 1.5) else Vector3.new(1.5, WALL_HEIGHT, length)
 		styled(
 			style.Walls,
-			add({ Name = "Wall" .. wallIndex, Size = size, Color = palette.Wall, Material = palette.WallMaterial }, CFrame.new(wall[2] + Vector3.new(0, wallY, 0)))
+			add(
+				{ Name = "Wall" .. wallIndex, Size = size, Color = palette.Wall, Material = palette.WallMaterial },
+				CFrame.new(wall[2] + Vector3.new(0, wallY, 0))
+			)
 		)
 		styled(
 			style.Trims,
@@ -607,8 +627,22 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 		)
 		-- 4 triangles whose corners line up with the tower's corners.
 		local roofBase = world(x, TOWER_TOP + 1, z)
-		local triangles = LowPoly.ConeTriangles(roofBase, roofBase + cframe.UpVector * ROOF_HEIGHT, (TOWER_SIZE + 1.8) / 2 * math.sqrt(2), 4, false, diagonal)
-		for _, part in LowPoly.DrawTriangles(triangles, { Name = "Roof", Color = palette.Roof, Material = palette.RoofMaterial, CollisionGroup = "Decor" }, model, 0.35) do
+		local triangles = LowPoly.ConeTriangles(
+			roofBase,
+			roofBase + cframe.UpVector * ROOF_HEIGHT,
+			(TOWER_SIZE + 1.8) / 2 * math.sqrt(2),
+			4,
+			false,
+			diagonal
+		)
+		for _, part in
+			LowPoly.DrawTriangles(
+				triangles,
+				{ Name = "Roof", Color = palette.Roof, Material = palette.RoofMaterial, CollisionGroup = "Decor" },
+				model,
+				0.35
+			)
+		do
 			table.insert(style.Roofs, part)
 		end
 		if corner.Z < 0 then
@@ -740,12 +774,15 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 	-- Upgrade station (a floating crystal on an altar) on the right of the gate plaza.
 	-- Its prompt only opens the upgrade window (UpgradeController), the purchase goes through
 	-- Remotes.UpgradeBase.
-	local station = add({
-		Name = "UpgradeStation",
-		Size = Vector3.new(4.4, 1.6, 4.4),
-		Color = FOUNDATION,
-		Material = Enum.Material.Slate,
-	}, CFrame.new(16, FLOOR_TOP + 0.8, STATION_Z))
+	local station = styled(
+		style.Walls,
+		add({
+			Name = "UpgradeStation",
+			Size = Vector3.new(4.4, 1.6, 4.4),
+			Color = palette.Wall,
+			Material = palette.WallMaterial,
+		}, CFrame.new(16, FLOOR_TOP + 0.8, STATION_Z))
+	)
 	styled(
 		style.Trims,
 		add({
@@ -764,6 +801,28 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 	)
 	if upgradeCrystal[1] then
 		Decor.Light(upgradeCrystal[1], GOLD, 14, 1.4)
+		local sparkles = Instance.new("ParticleEmitter")
+		sparkles.Color = ColorSequence.new(GOLD, WHITE)
+		sparkles.LightEmission = 1
+		sparkles.Rate = 4
+		sparkles.Lifetime = NumberRange.new(1, 1.8)
+		sparkles.Speed = NumberRange.new(0.6, 1.4)
+		sparkles.SpreadAngle = Vector2.new(180, 180)
+		sparkles.Size = NumberSequence.new(0.3, 0)
+		sparkles.Parent = upgradeCrystal[1]
+	end
+	-- Three golden shards growing out of the altar around the floating crystal.
+	for shard = 0, 2 do
+		local angle = shard * math.pi * 2 / 3 + 0.5
+		local direction = Vector3.new(math.cos(angle), 0, math.sin(angle))
+		local base = world(16 + direction.X * 1.55, FLOOR_TOP + 1.7, STATION_Z + direction.Z * 1.55)
+		local lean = cframe:VectorToWorldSpace((direction * 0.35 + Vector3.yAxis).Unit)
+		LowPoly.DrawTriangles(
+			LowPoly.ConeTriangles(base, base + lean * (1.6 + shard * 0.4), 0.6, 3),
+			facets("UpgradeShard", GOLD, Enum.Material.Glass),
+			model,
+			0.15
+		)
 	end
 	local upgradeGui = Instance.new("BillboardGui")
 	upgradeGui.Size = UDim2.fromScale(8, 2.6)
@@ -806,8 +865,20 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 		Material = Enum.Material.Fabric,
 		CanCollide = false,
 	}, CFrame.new(0, bannerTop - 3.5, bannerZ))
-	LowPoly.Triangle(world(-5, bannerTop - 7, bannerZ), world(-5, bannerTop - 9.2, bannerZ), world(0, bannerTop - 7, bannerZ), facets("BannerTail", color, Enum.Material.Fabric, 0.25), model)
-	LowPoly.Triangle(world(5, bannerTop - 7, bannerZ), world(0, bannerTop - 7, bannerZ), world(5, bannerTop - 9.2, bannerZ), facets("BannerTail", color, Enum.Material.Fabric, 0.25), model)
+	LowPoly.Triangle(
+		world(-5, bannerTop - 7, bannerZ),
+		world(-5, bannerTop - 9.2, bannerZ),
+		world(0, bannerTop - 7, bannerZ),
+		facets("BannerTail", color, Enum.Material.Fabric, 0.25),
+		model
+	)
+	LowPoly.Triangle(
+		world(5, bannerTop - 7, bannerZ),
+		world(0, bannerTop - 7, bannerZ),
+		world(5, bannerTop - 9.2, bannerZ),
+		facets("BannerTail", color, Enum.Material.Fabric, 0.25),
+		model
+	)
 	add({
 		Name = "BannerEmblem",
 		Size = Vector3.new(3.5, 3.5, 0.3),
@@ -864,26 +935,34 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 				}, CFrame.new(x, PEDESTAL_TOP - 0.275, z))
 			)
 
-			-- Collect pedestal: a short stone block with a glowing diamond button, touched by the owner.
+			-- Collect pedestal: a short stone column with a trim cap and a glowing diamond button,
+			-- touched (or stepped on) by the owner. The button turns green when cash is waiting.
 			local collectZ = z - COLLECT_OFFSET
 			local padBase = styled(
 				style.Walls,
 				add({
 					Name = "CollectBase" .. slotIndex,
-					Size = Vector3.new(3, 0.7, 3),
+					Size = Vector3.new(2.4, COLLECT_HEIGHT, 2.4),
 					Color = palette.Wall,
 					Material = palette.WallMaterial,
-				}, CFrame.new(x, FLOOR_TOP + 0.35, collectZ))
+				}, CFrame.new(x, FLOOR_TOP + COLLECT_HEIGHT / 2, collectZ))
+			)
+			local padCap = styled(
+				style.Trims,
+				add({
+					Name = "CollectCap" .. slotIndex,
+					Size = Vector3.new(3.2, 0.3, 3.2),
+					Color = palette.Trim,
+					Material = palette.TrimMaterial,
+				}, CFrame.new(x, FLOOR_TOP + COLLECT_HEIGHT + 0.15, collectZ))
 			)
 			local pad = add({
 				Name = "Pad" .. slotIndex,
-				Size = Vector3.new(1.9, 0.36, 1.9),
+				Size = Vector3.new(2, 0.4, 2),
 				Color = PAD_IDLE,
 				Material = Enum.Material.Neon,
 				CastShadow = false,
-			}, CFrame.new(x, FLOOR_TOP + 0.88, collectZ) * CFrame.Angles(0, math.rad(45), 0))
-			pad.CanTouch = true
-			padBase.CanTouch = true
+			}, CFrame.new(x, FLOOR_TOP + COLLECT_HEIGHT + 0.4, collectZ) * CFrame.Angles(0, math.rad(45), 0))
 
 			local padGui = Instance.new("BillboardGui")
 			padGui.Size = UDim2.fromScale(6, 1.6)
@@ -900,6 +979,7 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 				Glow = glow,
 				Pad = pad,
 				PadBase = padBase,
+				PadCap = padCap,
 				PadLabel = padLabel,
 				StandPosition = world(x, PEDESTAL_TOP, z),
 				GroundPosition = world(x, FLOOR_TOP, collectZ - 3.2),
@@ -933,7 +1013,7 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 		Style = style,
 	}
 
-	-- Collect pedestals: only the owner collects (touching the button or its stone block).
+	-- Collect pedestals: only the owner collects (touching the button, its cap or its column).
 	for _, slot in slots do
 		local debounce = 0
 		local function onTouched(hit: BasePart)
@@ -947,8 +1027,10 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 				PlotService.PadTouched:Fire(owner, plot, slot.Index)
 			end
 		end
-		slot.Pad.Touched:Connect(onTouched)
-		slot.PadBase.Touched:Connect(onTouched)
+		for _, part in { slot.Pad, slot.PadCap, slot.PadBase } do
+			part.CanTouch = true
+			part.Touched:Connect(onTouched)
+		end
 	end
 
 	lockPrompt.Triggered:Connect(function(player)
@@ -1065,6 +1147,19 @@ function PlotService.GetEntrancePath(plot: Plot): { Vector3 }
 	}
 end
 
+-- Waypoints of a critter walking home: up the ramp, through the gate, along the central aisle, then
+-- along its row to the spot in front of its collect pedestal (it never walks through other pedestals).
+function PlotService.GetSlotPath(plot: Plot, slotIndex: number): { Vector3 }
+	local path = PlotService.GetEntrancePath(plot)
+	local slot = plot.Slots[slotIndex]
+	if slot then
+		local ground = plot.CFrame:PointToObjectSpace(slot.GroundPosition)
+		table.insert(path, (plot.CFrame * CFrame.new(0, FLOOR_TOP, ground.Z)).Position)
+		table.insert(path, slot.GroundPosition)
+	end
+	return path
+end
+
 -- Pedestals beyond the player's slot count are shown greyed out.
 function PlotService.SetUnlockedSlots(plot: Plot, count: number)
 	for index, slot in plot.Slots do
@@ -1073,6 +1168,7 @@ function PlotService.SetUnlockedSlots(plot: Plot, count: number)
 		slot.PedestalBase.Transparency = if unlocked then 0 else 0.6
 		slot.Glow.Transparency = if unlocked then 0 else 1
 		slot.PadBase.Transparency = if unlocked then 0 else 0.6
+		slot.PadCap.Transparency = if unlocked then 0 else 0.6
 		slot.Pad.Transparency = if unlocked then 0 else 1
 		slot.Pad.CanCollide = unlocked
 		if not unlocked then
@@ -1233,7 +1329,11 @@ function PlotService.Start()
 	Remotes.TeleportHome.OnServerEvent:Connect(function(player)
 		local last = lastTeleport[player] or 0
 		if os.clock() - last < GameConfig.Home.TeleportCooldown then
-			Notifier.Send(player, `Wait {math.ceil(GameConfig.Home.TeleportCooldown - (os.clock() - last))}s before teleporting again`, "error")
+			Notifier.Send(
+				player,
+				`Wait {math.ceil(GameConfig.Home.TeleportCooldown - (os.clock() - last))}s before teleporting again`,
+				"error"
+			)
 			return
 		end
 		if StealService.IsCarrying(player) then

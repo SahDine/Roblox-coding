@@ -12,7 +12,8 @@
 	Rare spawns are announced to the whole server to create hype.
 
 	The timers are replicated as attributes of ReplicatedStorage.RareSpawns (server time):
-	  <Rarity> = next spawn, <Rarity>Last = last spawn. BoardsController shows the countdowns.
+	  <Rarity> = next spawn, <Rarity>Last = last spawn, <Rarity>From = start of the current
+	  countdown (server start or last spawn). BoardsController shows the countdowns.
 ]]
 
 local CollectionService = game:GetService("CollectionService")
@@ -47,6 +48,7 @@ type Entry = {
 	Token: Walker.Token,
 	Prompts: { ProximityPrompt },
 	Sold: boolean,
+	SpawnedAt: number, -- os.clock()
 }
 
 type PendingRobux = { EntryId: string, UnitName: string, Mutation: string, Rarity: string, Time: number }
@@ -161,6 +163,7 @@ local function spawnCritter(unitName: string, mutation: string): boolean
 		Token = Walker.NewToken(),
 		Prompts = {},
 		Sold = false,
+		SpawnedAt = os.clock(),
 	}
 
 	local price = Economy.GetUnitPrice(unitName, mutation)
@@ -234,6 +237,35 @@ local function spawnRandom()
 	local def = Units.PickFromRarity(rarity)
 	if def then
 		spawnCritter(def.Name, Mutations.Roll(luck))
+	end
+end
+
+-- The conveyor is full and a timed critter must spawn: the oldest unbought critter of the lowest
+-- rarity leaves the conveyor. Timed critters and critters in an open Robux prompt always stay.
+local function makeRoom()
+	if entryCount < CONVEYOR.MaxCritters then
+		return
+	end
+	local prompted = {}
+	for _, pending in pendingRobux do
+		prompted[pending.EntryId] = true
+	end
+	local victim: Entry? = nil
+	local victimIndex = math.huge
+	for id, entry in entries do
+		local index = Rarities.GetIndex(entry.Rarity)
+		if
+			not entry.Sold
+			and not prompted[id]
+			and not Rarities.IsTimed(entry.Rarity)
+			and (index < victimIndex or (index == victimIndex and victim and entry.SpawnedAt < victim.SpawnedAt))
+		then
+			victim, victimIndex = entry, index
+		end
+	end
+	if victim then
+		removeEntry(victim)
+		victim.Model:Destroy()
 	end
 end
 
@@ -314,13 +346,16 @@ local function spawnStep()
 		end
 		lastSpawnClock = clock
 		nextRandomClock = math.max(nextRandomClock, clock + CONVEYOR.SpawnInterval)
-		-- Timed critters ignore MaxCritters: the board promised them (at most a few extra critters).
+		-- The board promised it: a timed critter spawns even when the conveyor is full.
+		makeRoom()
 		local ok, result = pcall(spawnRarity, due.Rarity)
 		if not ok or not result then
 			warn(`[ConveyorService] Timed {due.Rarity} spawn failed: {result}`)
 		end
 		-- Restarted even after a failure so a broken spawn cannot retry every tick.
-		rareFolder:SetAttribute(due.Rarity .. "Last", workspace:GetServerTimeNow())
+		local spawnedAt = workspace:GetServerTimeNow()
+		rareFolder:SetAttribute(due.Rarity .. "Last", spawnedAt)
+		rareFolder:SetAttribute(due.Rarity .. "From", spawnedAt)
 		restartTimer(due, RARE.Timers[due.Rarity].Interval)
 		return
 	end
@@ -358,6 +393,7 @@ local function setupRareTimers()
 				Warned = false,
 			}
 			table.insert(rareTimers, timer)
+			rareFolder:SetAttribute(rarity .. "From", lastTimerUpdate)
 			publishTimer(timer, true)
 		end
 	end
@@ -367,7 +403,7 @@ end
 
 -- Reserved map zone next to the NEW CRITTERS portal: x in [-232, -198], z in [-38, -16].
 local BOARD_POSITION = Vector3.new(-215, 0, -27) -- ground point under the middle of the board
-local BOARD_TURN = math.rad(20) -- faces the conveyor axis, turned towards the spawn
+local BOARD_TURN = math.rad(10) -- faces the conveyor, slightly turned towards the spawn (both read it)
 local BOARD_WIDTH = 24
 local BOARD_HEIGHT = 15
 local BOARD_BOTTOM = 3.5 -- the lower rows stay visible above the players' heads
@@ -560,6 +596,7 @@ end
 local function buildRareBoard()
 	local model = Instance.new("Model")
 	model.Name = "RareSpawnBoard"
+	model.ModelStreamingMode = Enum.ModelStreamingMode.Atomic -- if StreamingEnabled is turned on
 
 	local normal = Vector3.new(-math.sin(BOARD_TURN), 0, math.cos(BOARD_TURN)) -- towards the viewers
 	local right = (-normal):Cross(Vector3.yAxis) -- the viewers' right

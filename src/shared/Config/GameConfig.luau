@@ -123,8 +123,18 @@ GameConfig.BaseUpgrade = {
 	-- Looks of the castle. A tier starts at FromLevel and lasts until the next one.
 	Tiers = {
 		{ FromLevel = 1, Name = "Stone Keep", Description = "Wood and stone", Color = Color3.fromRGB(205, 185, 160) },
-		{ FromLevel = 4, Name = "Royal Castle", Description = "Polished stone, banners, bigger flags", Color = Color3.fromRGB(110, 175, 255) },
-		{ FromLevel = 7, Name = "Crystal Citadel", Description = "Glowing crystals and magic walls", Color = Color3.fromRGB(150, 235, 255) },
+		{
+			FromLevel = 4,
+			Name = "Royal Castle",
+			Description = "Polished stone, banners, bigger flags",
+			Color = Color3.fromRGB(110, 175, 255),
+		},
+		{
+			FromLevel = 7,
+			Name = "Crystal Citadel",
+			Description = "Glowing crystals and magic walls",
+			Color = Color3.fromRGB(150, 235, 255),
+		},
 		{ FromLevel = 10, Name = "Golden Palace", Description = "Gold everywhere and a royal crown", Color = Color3.fromRGB(255, 205, 70) },
 	},
 }
@@ -151,15 +161,35 @@ GameConfig.Daily = {
 	Cooldown = 20 * 3600,
 	StreakResetAfter = 48 * 3600,
 	-- Cash = max(Cash, IncomeSeconds * income per second). Rarity grants a random critter.
+	-- Shaped like the login calendars of popular Roblox simulators: a small token on day 1, a big
+	-- jump on day 2 (8x: the reason to come back tomorrow), then a steady climb to a day-7 jackpot.
+	-- Cash is the floor for new players (day 1 = a Common, day 2 = an Uncommon), IncomeSeconds keeps
+	-- the reward meaningful later. A full week is ~50 min of income (it used to be ~1 h 50), so the
+	-- Robux cash packs stay the fast way to get money. Day 8 starts the cycle again.
 	Rewards = {
-		{ Cash = 250, IncomeSeconds = 300 },
-		{ Cash = 500, IncomeSeconds = 450 },
-		{ Cash = 1_000, IncomeSeconds = 600 },
-		{ Cash = 2_000, IncomeSeconds = 900 },
-		{ Cash = 4_000, IncomeSeconds = 1_200 },
-		{ Cash = 8_000, IncomeSeconds = 1_500 },
-		{ Cash = 15_000, IncomeSeconds = 1_800, Rarity = "Epic" },
+		{ Cash = 50, IncomeSeconds = 30 },
+		{ Cash = 400, IncomeSeconds = 180 },
+		{ Cash = 700, IncomeSeconds = 300 },
+		{ Cash = 1_200, IncomeSeconds = 420 },
+		{ Cash = 2_500, IncomeSeconds = 540 },
+		{ Cash = 4_000, IncomeSeconds = 720 },
+		{ Cash = 8_000, IncomeSeconds = 900, Rarity = "Epic" },
 	},
+}
+
+-- Global leaderboards: the "TOP REBIRTHS" and "TOP MONEY" boards next to the spawn
+-- (LeaderboardService). Scores of the players in the server are written to OrderedDataStores every
+-- RefreshInterval seconds and when they leave, and the top of each board is read back at the same
+-- pace. "Money" is the money earned in total (data.TotalEarned): unlike the current cash it is not
+-- reset by a rebirth and does not drop when a player buys critters.
+-- Renaming a store starts that board from zero.
+GameConfig.Leaderboard = {
+	RefreshInterval = 120,
+	FirstRefreshDelay = 15, -- seconds after the server start (lets the first players load)
+	TopCount = 10,
+	Stores = { Rebirths = "LB_Rebirths_v1", Money = "LB_MoneyEarned_v1" },
+	-- Studio test sessions read the boards but never submit scores (debug cash would pollute them).
+	WriteInStudio = false,
 }
 
 -- Promo codes (case-insensitive). Each player can redeem a code once.
@@ -172,7 +202,8 @@ GameConfig.Codes = {
 
 GameConfig.Sounds = {
 	Notify = "rbxasset://sounds/electronicpingshort.wav",
-	Slap = "rbxasset://sounds/swordslash.wav",
+	Slap = "rbxasset://sounds/swordslash.wav", -- swing whoosh (every client)
+	SlapHit = "rbxasset://sounds/action_jump_land.mp3", -- the slap lands (pitched up)
 }
 
 GameConfig.Debug = {
