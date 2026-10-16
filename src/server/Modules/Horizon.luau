@@ -37,7 +37,15 @@ local function farProps(name: string, color: Color3): LowPoly.PartProps
 	return props
 end
 
-local function ring(center: Vector3, count: number, radius: number, y: number, twist: number, rng: Decor.Rng, jitter: number): { [number]: Vector3 }
+local function ring(
+	center: Vector3,
+	count: number,
+	radius: number,
+	y: number,
+	twist: number,
+	rng: Decor.Rng,
+	jitter: number
+): { [number]: Vector3 }
 	local points = {}
 	for k = 0, count - 1 do
 		local angle = twist + (k + rng:NextNumber(-jitter, jitter)) * math.pi * 2 / count
@@ -51,7 +59,15 @@ end
 	Mountain on the ground point `base`: a jagged base ring, a shoulder ring, a summit ring and a
 	peak (5 * sides triangles). Snowy mountains get a zig-zag snow cap.
 ]]
-function Horizon.Mountain(parent: Instance, base: Vector3, radius: number, height: number, seed: number, snowy: boolean, sides: number?): Model
+function Horizon.Mountain(
+	parent: Instance,
+	base: Vector3,
+	radius: number,
+	height: number,
+	seed: number,
+	snowy: boolean,
+	sides: number?
+): Model
 	local rng = Decor.Rng(seed)
 	local model = newModel("Mountain", parent)
 	local n = sides or 6
@@ -86,14 +102,14 @@ function Horizon.Mountain(parent: Instance, base: Vector3, radius: number, heigh
 	return model
 end
 
--- Puffy low-poly cloud: an icosahedron and two smaller flat puffs, shaded lavender underneath (~72 parts).
+-- Puffy low-poly cloud: a big puff and two smaller flat ones, shaded lavender underneath (~64 parts).
 function Horizon.Cloud(parent: Instance, center: Vector3, scale: number, seed: number): Model
 	local rng = Decor.Rng(seed)
 	local model = newModel("Cloud", parent)
 	local s = scale
 	local yaw = CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
 	local puffs = {
-		{ LowPoly.Icosahedron(), Vector3.zero, Vector3.new(16, 8, 12) },
+		{ LowPoly.Gyrobipyramid(), Vector3.zero, Vector3.new(16, 8, 12) },
 		{ LowPoly.Octahedron(), Vector3.new(9.5, -1.6, rng:NextNumber(-2, 2)), Vector3.new(11, 5.4, 8.5) },
 		{ LowPoly.Octahedron(), Vector3.new(-9, -2, rng:NextNumber(-2, 2)), Vector3.new(10, 4.8, 8) },
 	}
@@ -169,36 +185,60 @@ function Horizon.FloatingIsland(
 		Flora.CrystalCluster(model, ground - side * 5 * s, 0.6 * s, seed + 2, crystalColor)
 	end
 
-	-- Waterfall: a stream over the grass, then a straight sheet of water down to `fallTo`.
+	--[[
+		Waterfall: a stream over the grass, then a sheet of water leaning slightly forwards and
+		widening as it falls, in three bands that grow more transparent towards the bottom (the
+		water breaks into spray), with two pale streaks running down its front (~24 parts).
+	]]
 	local lip = rim[0] + fallSide * 0.3 * s
-	local width = 3 * s
-	local across = side.Unit * (width / 2)
+	local width = 4.4 * s
+	local across = side.Unit
 	local water = farProps("Waterfall", WATER)
 	water.Material = Enum.Material.Glass
-	water.Transparency = 0.3
 	water.Thickness = 0.3
+	water.Transparency = 0.2
 	local source = center + fallSide * radius * 0.35 + Vector3.new(0, 0.85 * s, 0)
-	LowPoly.Triangle(source + across, source - across, lip + across, water, model)
-	LowPoly.Triangle(source - across, lip - across, lip + across, water, model)
-	local bottom = Vector3.new(lip.X, fallTo, lip.Z) + fallSide * 1.5 * s
-	LowPoly.Triangle(lip + across, lip - across, bottom + across * 1.4, water, model)
-	LowPoly.Triangle(lip - across, bottom - across * 1.4, bottom + across * 1.4, water, model)
-	-- A brighter streak running down the front of the sheet.
-	local streak = farProps("Waterfall", WATER:Lerp(WHITE, 0.55))
+	local sourceHalf = width * 0.35
+	LowPoly.Triangle(source + across * sourceHalf, source - across * sourceHalf, lip + across * width / 2, water, model)
+	LowPoly.Triangle(source - across * sourceHalf, lip - across * width / 2, lip + across * width / 2, water, model)
+	local bottom = Vector3.new(lip.X, fallTo, lip.Z) + fallSide * 2 * s
+	local function sheet(t: number): (Vector3, number)
+		return lip:Lerp(bottom, t), width / 2 * (1 + t)
+	end
+	for band = 1, 3 do
+		local high, highHalf = sheet((band - 1) / 3)
+		local low, lowHalf = sheet(band / 3)
+		water.Transparency = 0.15 + band * 0.12
+		LowPoly.Triangle(high + across * highHalf, high - across * highHalf, low + across * lowHalf, water, model)
+		LowPoly.Triangle(high - across * highHalf, low - across * lowHalf, low + across * lowHalf, water, model)
+	end
+	-- Pale streaks just in front of the sheet (it leans outwards by 2 studs per unit of scale).
+	local streak = farProps("Waterfall", WATER:Lerp(WHITE, 0.6))
 	streak.Material = Enum.Material.Glass
-	streak.Transparency = 0.25
+	streak.Transparency = 0.3
 	streak.Thickness = 0.2
 	local front = fallSide * 0.4
-	LowPoly.Triangle(lip + across * 0.45 + front, lip - across * 0.3 + front, bottom + across * 0.2 + front, streak, model)
+	for _, offset in { -0.45, 0.4 } do
+		local foot, footHalf = sheet(rng:NextNumber(0.6, 0.8))
+		local topPoint = lip + across * (offset * width / 2)
+		LowPoly.Triangle(
+			topPoint + front + across * 0.35 * s,
+			topPoint + front - across * 0.35 * s,
+			foot + across * (offset * footHalf) + front,
+			streak,
+			model
+		)
+	end
 
 	-- Foam where the water lands: an eight-pointed star of flat right triangles (1 part each).
 	local foam = farProps("Foam", WHITE)
 	foam.Transparency = 0.2
 	foam.Thickness = 0.1
 	local splash = bottom + Vector3.new(0, 0.1, 0)
+	local spread = width * 1.6
 	for k = 0, 7 do
 		local angle = k * math.pi / 4 + rng:NextNumber(-0.15, 0.15)
-		local reach = width * (if k % 2 == 0 then 1.5 else 0.95) * rng:NextNumber(0.85, 1.15)
+		local reach = spread * (if k % 2 == 0 then 1 else 0.65) * rng:NextNumber(0.85, 1.15)
 		local d1 = Vector3.new(math.cos(angle), 0, math.sin(angle))
 		local d2 = Vector3.new(-d1.Z, 0, d1.X)
 		LowPoly.Triangle(splash, splash + d1 * reach, splash + d2 * reach * 0.55, foam, model)

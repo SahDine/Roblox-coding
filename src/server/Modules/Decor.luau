@@ -46,7 +46,15 @@ function Decor.Ellipsoid(name: string, size: Vector3, cframe: CFrame, color: Col
 end
 
 -- Upright cylinder whose base sits at `base`.
-function Decor.Column(name: string, height: number, diameter: number, base: Vector3, color: Color3, parent: Instance, props: Props?): BasePart
+function Decor.Column(
+	name: string,
+	height: number,
+	diameter: number,
+	base: Vector3,
+	color: Color3,
+	parent: Instance,
+	props: Props?
+): BasePart
 	local options = props or {}
 	options.Name = name
 	options.Shape = Enum.PartType.Cylinder

@@ -94,7 +94,16 @@ local function trunk(model: Model, base: Vector3, top: Vector3, radius: number, 
 	)
 end
 
-local function blob(model: Model, name: string, data: LowPoly.MeshData, center: Vector3, size: Vector3, color: Color3, rng: Rng, groundY: number?)
+local function blob(
+	model: Model,
+	name: string,
+	data: LowPoly.MeshData,
+	center: Vector3,
+	size: Vector3,
+	color: Color3,
+	rng: Rng,
+	groundY: number?
+)
 	local triangles = meshTriangles(data, yawed(center, rng), size)
 	if groundY then
 		triangles = Decor.AboveGround(triangles, groundY)
@@ -142,7 +151,14 @@ function Flora.Pine(parent: Instance, base: Vector3, scale: number, seed: number
 			false,
 			randomFlat(rng)
 		)
-		Decor.DrawShaded(triangles, Decor.Facets("Needles", color:Lerp(WHITE, tier * 0.04)), model, Decor.Thickness(radius * 0.4), rng, 0.06)
+		Decor.DrawShaded(
+			triangles,
+			Decor.Facets("Needles", color:Lerp(WHITE, tier * 0.04)),
+			model,
+			Decor.Thickness(radius * 0.4),
+			rng,
+			0.06
+		)
 		y += height * 0.55
 		radius *= 0.72
 	end
@@ -163,7 +179,8 @@ function Flora.FarPine(parent: Instance, base: Vector3, scale: number, seed: num
 	local y, radius = 0.6 * s, rng:NextNumber(4.4, 5) * s
 	for tier = 1, 2 do
 		local height = (if tier == 1 then 7.4 else 5.8) * s
-		local triangles = LowPoly.ConeTriangles(base + Vector3.new(0, y, 0), base + Vector3.new(0, y + height, 0), radius, 4, false, randomFlat(rng))
+		local triangles =
+			LowPoly.ConeTriangles(base + Vector3.new(0, y, 0), base + Vector3.new(0, y + height, 0), radius, 4, false, randomFlat(rng))
 		props.Color = color:Lerp(WHITE, tier * 0.05)
 		Decor.DrawShaded(triangles, props, model, Decor.Thickness(radius * 0.4), rng, 0.05)
 		y += height * 0.5
@@ -193,8 +210,24 @@ function Flora.CherryTree(parent: Instance, base: Vector3, scale: number, seed: 
 	)
 	local pink = pick(Flora.Blossoms, rng)
 	local main = blob(model, "Blossom", LowPoly.Gyrobipyramid(), crown, Vector3.new(9, 6.2, 9) * s, pink, rng)
-	blob(model, "Blossom", LowPoly.Octahedron(), branchTip + Vector3.new(0, 0.6 * s, 0), Vector3.new(5.6, 4.4, 5.6) * s, pink:Lerp(WHITE, 0.2), rng)
-	blob(model, "Blossom", LowPoly.Octahedron(), crown - side * 3.4 * s + Vector3.new(0, 0.8 * s, 0), Vector3.new(5, 4, 5) * s, pink:Lerp(BLACK, 0.06), rng)
+	blob(
+		model,
+		"Blossom",
+		LowPoly.Octahedron(),
+		branchTip + Vector3.new(0, 0.6 * s, 0),
+		Vector3.new(5.6, 4.4, 5.6) * s,
+		pink:Lerp(WHITE, 0.2),
+		rng
+	)
+	blob(
+		model,
+		"Blossom",
+		LowPoly.Octahedron(),
+		crown - side * 3.4 * s + Vector3.new(0, 0.8 * s, 0),
+		Vector3.new(5, 4, 5) * s,
+		pink:Lerp(BLACK, 0.06),
+		rng
+	)
 
 	-- Petals drifting down from the crown.
 	local emitterPart = Decor.Part({
@@ -224,22 +257,25 @@ function Flora.CherryTree(parent: Instance, base: Vector3, scale: number, seed: 
 	return model
 end
 
--- Magic tree: dark trunk with glowing crystal leaves (~65 parts).
+--[[
+	Magic tree: a gnarled dark trunk forking into three branches, each holding up a big crystal
+	(the top one glows), ~90 parts.
+]]
 function Flora.CrystalTree(parent: Instance, base: Vector3, scale: number, seed: number, color: Color3): Model
 	local rng = Decor.Rng(seed)
 	local s = scale
 	local model = newModel("CrystalTree", parent)
-	local top = base + Vector3.new(0, 7 * s, 0) + randomFlat(rng) * 0.6 * s
-	trunk(model, base, top, 0.85 * s, rng, CRYSTAL_BARK, 3)
+	local top = base + Vector3.new(0, 6.6 * s, 0) + randomFlat(rng) * 0.6 * s
+	trunk(model, base, top, 1.1 * s, rng, CRYSTAL_BARK, 4)
 
-	local tips = { top + Vector3.new(0, 0.4 * s, 0) }
+	local tips = { top + Vector3.new(0, 0.3 * s, 0) }
 	local angle = rng:NextNumber(0, math.pi * 2)
-	for index = 1, 2 do
+	for index = 1, 3 do
 		local direction = Vector3.new(math.cos(angle), 0, math.sin(angle))
-		local fork = base + Vector3.new(0, (3.6 + index * 0.9) * s, 0)
-		local tip = fork + direction * 3.4 * s + Vector3.new(0, 2.2 * s, 0)
+		local fork = base + Vector3.new(0, (2.8 + index * 0.8) * s, 0)
+		local tip = fork + direction * rng:NextNumber(3, 3.6) * s + Vector3.new(0, rng:NextNumber(1.6, 2.4) * s, 0)
 		Decor.DrawShaded(
-			LowPoly.ConeTriangles(fork, tip, 0.4 * s, 3, false, randomFlat(rng)),
+			LowPoly.ConeTriangles(fork, tip, 0.45 * s, 3, false, randomFlat(rng)),
 			Decor.Facets("Branch", CRYSTAL_BARK),
 			model,
 			0.05,
@@ -247,18 +283,22 @@ function Flora.CrystalTree(parent: Instance, base: Vector3, scale: number, seed:
 			0.05
 		)
 		table.insert(tips, tip)
-		angle += math.pi * rng:NextNumber(0.8, 1.2)
+		angle += math.pi * 2 / 3 + rng:NextNumber(-0.35, 0.35)
 	end
 	for index, tip in tips do
-		local size = (if index == 1 then Vector3.new(2.6, 5, 2.6) else Vector3.new(2, 3.6, 2)) * s
-		local center = tip + Vector3.new(0, size.Y * 0.3, 0)
-		local frame = yawed(center, rng) * CFrame.Angles(rng:NextNumber(-0.25, 0.25), 0, rng:NextNumber(-0.25, 0.25))
-		local props = Decor.Facets("CrystalLeaf", color:Lerp(WHITE, if index == 1 then 0 else 0.25), Enum.Material.Glass)
-		props.Transparency = 0.15
+		local main = index == 1
+		local size = (if main then Vector3.new(3.4, 6.4, 3.4) else Vector3.new(2.4, 4.2, 2.4)) * s
+		-- The lower point of each crystal sits on its branch tip.
+		local center = tip + Vector3.new(0, size.Y * 0.4, 0)
+		local frame = yawed(center, rng) * CFrame.Angles(rng:NextNumber(-0.2, 0.2), 0, rng:NextNumber(-0.2, 0.2))
+		local props = if main
+			then Decor.Facets("CrystalLeaf", color:Lerp(BLACK, 0.15), Enum.Material.Neon)
+			else Decor.Facets("CrystalLeaf", color:Lerp(WHITE, 0.3), Enum.Material.Glass)
+		props.Transparency = if main then 0.05 else 0.15
 		props.CastShadow = false
 		local parts = LowPoly.DrawTriangles(meshTriangles(LowPoly.Bipyramid(4, -0.2), frame, size), props, model, 0.12)
-		if index == 1 and parts[1] then
-			Decor.Light(parts[1], color, 16 * s, 1.4)
+		if main and parts[1] then
+			Decor.Light(parts[1], color, 18 * s, 1.5)
 		end
 	end
 	return model
@@ -317,12 +357,8 @@ function Flora.CrystalCluster(parent: Instance, base: Vector3, scale: number, se
 	local glow = Decor.Facets("Crystal", color:Lerp(BLACK, 0.25), Enum.Material.Neon)
 	glow.Transparency = 0.1
 	glow.CastShadow = false
-	local main = LowPoly.DrawTriangles(
-		Decor.AboveGround(meshTriangles(LowPoly.Bipyramid(4, -0.25), mainFrame, mainSize), base.Y),
-		glow,
-		model,
-		0.15
-	)
+	local main =
+		LowPoly.DrawTriangles(Decor.AboveGround(meshTriangles(LowPoly.Bipyramid(4, -0.25), mainFrame, mainSize), base.Y), glow, model, 0.15)
 	if main[1] then
 		Decor.Light(main[1], color, 16 * s, 1.3)
 	end

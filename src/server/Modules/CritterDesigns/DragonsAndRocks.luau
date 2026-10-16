@@ -276,34 +276,21 @@ local function prong(b, name: string, base: Vector3, tip: Vector3, width: number
 end
 
 --[[
-	Fluffy tail: a spindle from `root` through its widest point `ring` to `tip`; the tip may bend away from
-	the root-ring line (a curl). The root-ring edge is straight and the bulk lies on the `down` side, so the
-	root half is two right-angled faces + one (4 parts, rootColor) and the tip half 6 parts (tipColor).
+	Fluffy tail / lock: a three-sided spindle from `root` through a ring of radius `radius` around `ring` to
+	`tip` (the tip may bend away from the root-ring line: a curl). Root half in rootColor, tip half in
+	tipColor, ~12 parts. `up` turns the ring (one ridge towards it).
 ]]
-local function spindle(
+local function plume(
 	b,
 	name: string,
 	root: Vector3,
 	ring: Vector3,
 	tip: Vector3,
-	width: number,
-	depth: number,
-	down: Vector3,
+	radius: number,
 	rootColor: any,
-	tipColor: any
+	tipColor: any,
+	up: Vector3?
 )
-	local left, right = prongPoints(ring, root, width, depth, down)
-	local vertices = { root, ring, left, right, tip }
-	b:Mesh(name, vertices, { { 1, 2, 3 }, { 1, 2, 4 }, { 1, 3, 4 } }, rootColor, THIN)
-	b:Mesh(name .. "Tip", vertices, { { 5, 2, 3 }, { 5, 2, 4 }, { 5, 3, 4 } }, tipColor, THIN)
-end
-
---[[
-	Fluffy tail / lock: a three-sided spindle from `root` through a ring of radius `radius` around `ring` to
-	`tip` (the tip may bend away from the root-ring line: a curl). Root half in rootColor, tip half in
-	tipColor, ~12 parts. `up` turns the ring (one ridge towards it).
-]]
-local function plume(b, name: string, root: Vector3, ring: Vector3, tip: Vector3, radius: number, rootColor: any, tipColor: any, up: Vector3?)
 	local u, v = LowPoly.Perpendiculars(ring - root, up)
 	local vertices = { root, tip }
 	for k = 0, 2 do
@@ -547,6 +534,31 @@ local function column(b, name: string, points: { Vector3 }, radii: { number }, c
 	end
 end
 
+--[[
+	Slim leg from `top` to `bottom`: a spindle whose front edge is straight (on the axis) and whose bulk lies towards
+	`back`, widest at `ringAt`. Four of its six faces are right-angled (one part each): ~8 parts.
+]]
+local function strut(
+	b,
+	name: string,
+	top: Vector3,
+	bottom: Vector3,
+	width: number,
+	depth: number,
+	back: Vector3,
+	color: any,
+	ringAt: number?
+)
+	local axis = bottom - top
+	local d = axis.Unit
+	local dn = (back - d * back:Dot(d)).Unit
+	local across = d:Cross(dn) * (width / 2)
+	local ring = top + axis * (ringAt or 0.4)
+	local low = ring + dn * depth
+	local faces = { { 5, 2, 1 }, { 5, 3, 1 }, { 2, 3, 1 }, { 5, 2, 4 }, { 5, 3, 4 }, { 2, 3, 4 } }
+	return b:Mesh(name, { top, low + across, low - across, bottom, ring }, faces, color, THIN)
+end
+
 -- Small flat triangle on the front of a shape at (x, y) from its centre, point down, lifted `lift` off it (noses).
 local function faceTri(b, name: string, shape, x: number, y: number, width: number, height: number, color: any, lift: number?)
 	local frame = b:OnSurface(shape, x, y) * CFrame.new(0, 0, -(lift or 0.03))
@@ -573,7 +585,17 @@ local function spikeFrame(base: Vector3, tip: Vector3, hint: Vector3?): (Vector3
 end
 
 -- Flat triangle lying on the face of a Spike pyramid opposite its ridge (inner ears), shrunk by `scale`.
-local function innerFace(b, name: string, base: Vector3, tip: Vector3, width: number, depth: number, hint: Vector3?, scale: number, color: any)
+local function innerFace(
+	b,
+	name: string,
+	base: Vector3,
+	tip: Vector3,
+	width: number,
+	depth: number,
+	hint: Vector3?,
+	scale: number,
+	color: any
+)
 	local x, _, z = spikeFrame(base, tip, hint)
 	local front = base + z * (depth * 0.6)
 	local left = base - x * (width / 2) - z * (depth * 0.4)
@@ -588,28 +610,6 @@ local function innerFace(b, name: string, base: Vector3, tip: Vector3, width: nu
 		return centre + (point - centre) * scale + offset
 	end
 	return b:Tri(name, shrink(left), shrink(right), shrink(tip), color, THIN)
-end
-
---[[
-	Fluffy collar (ruffs, manes): a star-shaped skirt from `apex` (hidden in the neck) down to a zig-zag rim of
-	`count` tufts around `center`: tips reach `inner + reach` and fall `drop` (Vector2(front, back)), notches stay
-	close in. 2 facets per tuft (~4 parts); open underneath (the body fills it).
-]]
-local function ruff(b, name: string, apex: Vector3, center: Vector3, inner: number, count: number, reach: Vector2, drop: Vector2, color: any, twist: number?)
-	local vertices, faces = { apex }, {}
-	local points = count * 2
-	for k = 0, points - 1 do
-		local a = (k + (twist or 0)) * TAU / points
-		local front = (1 + math.cos(a)) / 2
-		local length = reach.Y + (reach.X - reach.Y) * front
-		local fall = drop.Y + (drop.X - drop.Y) * front
-		if k % 2 == 1 then
-			length, fall = length * 0.3, fall * 0.45
-		end
-		table.insert(vertices, center + V(math.sin(a), 0, -math.cos(a)) * (inner + length) - V(0, fall, 0))
-		table.insert(faces, { 1, k + 2, (k + 1) % points + 2 })
-	end
-	return b:Mesh(name, vertices, faces, color, THIN)
 end
 
 -- Dragon line ------------------------------------------------------------------------------------
@@ -631,13 +631,13 @@ Designs["Drakelet"] = function(b)
 	local path = {
 		V(0, 2.62, -0.45),
 		V(0, 1.74, -0.1),
-		V(0.04, 0.84, -0.4),
-		V(0.92, 0.42, 0.06),
-		V(0.8, 0.4, 1.22),
-		V(-0.36, 0.36, 1.5),
-		V(-1.12, 0.95, 0.85),
+		V(0.04, 0.84, -0.32),
+		V(0.98, 0.42, 0.05),
+		V(0.62, 0.4, 1.2),
+		V(-0.7, 0.38, 1.05),
+		V(-1.02, 1.1, -0.32),
 	}
-	local body = serpentRings(path, { 0.38, 0.45, 0.52, 0.5, 0.42, 0.3, 0 }, 5, FRONT, 0.03, 0.85)
+	local body = serpentRings(path, { 0.38, 0.45, 0.52, 0.5, 0.44, 0.32, 0 }, 5, FRONT, 0.03, 0.85)
 	local neckPaint = bellyFacing(V(0, -0.15, -1), 0.5)
 	local coilPaint = bellyFacing(V(0, -1, 0), 0.6)
 
@@ -658,7 +658,8 @@ Designs["Drakelet"] = function(b)
 	b:Bone("Neck", path[3], { Role = "Head", Amp = 0.45 }, function()
 		serpentPart(b, "Neck", body, 1, 3, neckPaint)
 		b:Bone("Head", V(0, 2.35, -0.42), nil, function()
-			local head = sculpt(b, "Head", V(1.62, 1.5, 1.5), V(0, 2.98, -0.5), nil, "Body", { Deform = domed(0.86, snout(0.16, 1.08, 0.02)) })
+			local head =
+				sculpt(b, "Head", V(1.62, 1.5, 1.5), V(0, 2.98, -0.5), nil, "Body", { Deform = domed(0.86, snout(0.16, 1.08, 0.02)) })
 			b:Eyes(head, 0.38, 0.08, V(0.44, 0.54, 0.26), DRATINI_EYE)
 			b:Mouth(head, -0.3, 0.36)
 			-- Small white nub on the forehead.
@@ -685,15 +686,15 @@ Designs["Serpendrake"] = function(b)
 	b.Hover = 1.2
 	-- The body falls from the head in an S (right, back, left) and the tail curls up again on the left.
 	local path = {
-		V(0, 4.35, -0.78),
-		V(-0.55, 3.45, -0.4),
-		V(0.2, 2.6, 0.12),
-		V(0.95, 1.7, 0.2),
-		V(0.3, 0.92, 0.72),
-		V(-0.8, 0.95, 0.85),
-		V(-1.25, 2.0, 0.55),
+		V(0, 4.4, -0.8),
+		V(-0.42, 3.55, -0.5),
+		V(-0.08, 2.68, 0.0),
+		V(0.75, 2.05, 0.2),
+		V(0.68, 1.12, 0.5),
+		V(-0.32, 0.82, 0.72),
+		V(-1.15, 1.48, 0.42),
 	}
-	local body = serpentRings(path, { 0.34, 0.4, 0.46, 0.48, 0.44, 0.32, 0 }, 5, FRONT)
+	local body = serpentRings(path, { 0.38, 0.44, 0.5, 0.52, 0.46, 0.34, 0 }, 5, FRONT)
 	local neckPaint = bellyFacing(V(0, -0.2, -1), 0.62)
 	local bodyPaint = bellyFacing(V(0, -1, -0.5), 0.6)
 
@@ -705,21 +706,22 @@ Designs["Serpendrake"] = function(b)
 		serpentPart(b, "Tail", body, 4, 6, bodyPaint, 0.2)
 		b:Bone("Tail2", path[6], { Phase = 0.2, Amp = 0.6 }, function()
 			serpentPart(b, "TailTip", body, 6, 7, bodyPaint, 0.2)
-			b:Ball("TailOrb1", V(0.5, 0.56, 0.5), path[6]:Lerp(path[7], 0.3), nil, "Accent", CRYSTAL)
-			b:Ball("TailOrb2", V(0.4, 0.46, 0.4), path[6]:Lerp(path[7], 0.6), nil, "Accent", CRYSTAL)
+			sculpt(b, "TailOrb1", V(0.56, 0.62, 0.56), path[6]:Lerp(path[7], 0.32), nil, "Accent", { Ring = 3, Mesh = CRYSTAL })
+			sculpt(b, "TailOrb2", V(0.46, 0.52, 0.46), path[6]:Lerp(path[7], 0.62), nil, "Accent", { Ring = 3, Mesh = CRYSTAL })
 		end)
 	end)
 
 	b:Bone("Neck", path[3], { Role = "Head", Amp = 0.4 }, function()
 		serpentPart(b, "Neck", body, 1, 3, neckPaint)
 		-- Crystal orb on the throat.
-		b:Ball("NeckOrb", V(0.5, 0.5, 0.42), V(-0.42, 3.4, -0.82), nil, "Accent", CRYSTAL)
+		b:Ball("NeckOrb", V(0.52, 0.52, 0.44), V(-0.36, 3.42, -0.94), nil, "Accent", CRYSTAL)
 		b:Bone("Head", V(0, 4.0, -0.7), nil, function()
-			local head = sculpt(b, "Head", V(1.3, 1.16, 1.66), V(0, 4.52, -0.92), nil, "Body", { Deform = domed(0.9, snout(0.34, 0.86, 0.06)) })
-			b:Eyes(head, 0.31, 0.14, V(0.32, 0.4, 0.24), DRAGONAIR_EYE)
+			local head =
+				sculpt(b, "Head", V(1.44, 1.28, 1.76), V(0, 4.56, -0.96), nil, "Body", { Deform = domed(0.9, snout(0.36, 0.86, 0.06)) })
+			b:Eyes(head, 0.34, 0.14, V(0.36, 0.44, 0.26), DRAGONAIR_EYE)
 			b:Mouth(head, -0.26, 0.3)
 			-- White unicorn horn on the forehead.
-			local hornBase = onFront(b, head, 0, 4.92, -0.14)
+			local hornBase = onFront(b, head, 0, 4.98, -0.14)
 			prong(b, "Horn", hornBase, hornBase + V(0, 0.66, -0.06), 0.3, 0.26, BACK, "Belly")
 			-- Feathered head wings (they flap while it hovers).
 			b:MirrorBone("Wing", V(0.54, 4.62, -0.8), nil, function()
@@ -768,16 +770,16 @@ Designs["Puffdrake"] = function(b)
 	end)
 	-- Thick legs with big three-toed feet (they dangle and paddle while it hovers).
 	b:MirrorBone("Leg", V(0.68, 1.0, 0.12), nil, function()
-		b:Limb("Leg", V(0.64, 1.35, 0.16), V(0.76, 0.24, -0.02), 0.82, "Body", { RingAt = 0.36 })
-		prong(b, "Foot", V(0.76, 0.36, 0.16), V(0.8, 0.03, -0.62), 0.86, 0.34, V(0, -0.85, 0.5), "Body")
+		b:Limb("Leg", V(0.64, 1.4, 0.16), V(0.76, 0.24, -0.02), 1.0, "Body", { RingAt = 0.36 })
+		prong(b, "Foot", V(0.76, 0.4, 0.2), V(0.8, 0.03, -0.66), 0.96, 0.4, V(0, -0.85, 0.5), "Body")
 		claws(b, "Toe", V(0.8, 0.14, -0.3), V(0, -0.3, -1), SIDE, 3, 0.14, 0.2, "Belly")
 	end)
 
 	-- Small wings on the back: an orange spar and a teal membrane.
 	b:MirrorBone("Wing", V(0.42, 2.62, 0.72), nil, function()
-		prong(b, "WingSpar", V(0.36, 2.6, 0.7), V(1.95, 3.8, 1.02), 0.2, 0.16, DOWN, "Body")
-		b:Tri("Membrane1", V(0.42, 2.6, 0.78), V(1.91, 3.76, 1.04), V(1.66, 2.78, 1.24), "Accent", THIN)
-		b:Tri("Membrane2", V(0.42, 2.6, 0.78), V(1.66, 2.78, 1.24), V(0.98, 2.16, 1.1), "Accent", THIN)
+		prong(b, "WingSpar", V(0.36, 2.6, 0.7), V(2.25, 4.1, 1.0), 0.22, 0.18, DOWN, "Body")
+		b:Tri("Membrane1", V(0.42, 2.6, 0.78), V(2.21, 4.06, 1.02), V(1.9, 2.86, 1.26), "Accent", THIN)
+		b:Tri("Membrane2", V(0.42, 2.6, 0.78), V(1.9, 2.86, 1.26), V(1.05, 2.1, 1.12), "Accent", THIN)
 	end)
 
 	-- Thick tail tapering behind (it hangs down while it hovers).
@@ -787,12 +789,22 @@ Designs["Puffdrake"] = function(b)
 	end)
 
 	b:Bone("Head", V(0, 3.5, -0.32), nil, function()
-		local head = sculpt(b, "Head", V(1.62, 1.42, 1.48), V(0, 4.02, -0.44), nil, "Body", { Deform = domed(0.86, snout(0.46, 1.02, 0.04, 0.2)) })
+		local head =
+			sculpt(b, "Head", V(1.62, 1.42, 1.48), V(0, 4.02, -0.44), nil, "Body", { Deform = domed(0.86, snout(0.46, 1.02, 0.04, 0.2)) })
 		b:Eyes(head, 0.34, 0.26, V(0.3, 0.36, 0.22), "Black")
-		b:Mouth(head, -0.36, 0.64)
+		b:Mouth(head, -0.34, 0.42, true)
 		-- Small horns on the sides of the head.
 		for _, side in { -1, 1 } do
-			prong(b, "Horn" .. (if side < 0 then "L" else "R"), V(side * 0.52, 4.28, -0.28), V(side * 0.7, 4.7, -0.02), 0.22, 0.18, BACK, "Body")
+			prong(
+				b,
+				"Horn" .. (if side < 0 then "L" else "R"),
+				V(side * 0.52, 4.28, -0.28),
+				V(side * 0.7, 4.7, -0.02),
+				0.22,
+				0.18,
+				BACK,
+				"Body"
+			)
 		end
 		-- Thin antennae arching up from the forehead, tips bending forwards (they twitch like ears).
 		b:MirrorBone("Ear", V(0.17, 4.5, -0.72), nil, function()
@@ -858,149 +870,197 @@ Designs["Pebbit"] = function(b)
 	end)
 end
 
--- Big round boulder of rock plates standing on stubby legs: the tan reptile head pokes out of its upper front
--- under a heavy rock brow, thick clawed arms stick out of its sides, rocky crags on top.
+-- Big round boulder of rock plates standing on short stubby legs: the tan reptile head peeks out of its upper front
+-- under a heavy rock brow, thick arms with three-clawed hands stick out of its sides, rocky crags all over the shell.
 Designs["Bouldron"] = function(b)
-	local bumps = { 1.08, 0.95, 1.1, 0.96, 1.07, 0.97, 1.06, 0.95, 1.08, 0.97, 1.04, 0.92 }
-	local shell = sculpt(b, "Shell", V(3.1, 2.8, 2.95), V(0, 1.98, 0.25), nil, "Body", {
-		Deform = lumps(bumps),
+	local bumps = { 1.0, 0.95, 1.1, 0.96, 1.07, 0.97, 1.06, 0.95, 1.08, 0.97, 1.04, 0.92 }
+	local shell = sculpt(b, "Shell", V(3.3, 3.0, 3.1), V(0, 1.9, 0.22), nil, "Body", {
+		Deform = domed(0.86, lumps(bumps)),
 		Paint = stonePaint("Accent", nil, 1),
 	})
 	b:SetCore(shell)
-	-- Low rocky outcrops on the shell (shoulders and back), leaning backwards.
-	for index, spot in { V(1.0, 3.0, 0.35), V(-0.9, 2.9, 0.7), V(0.25, 2.4, 1.75) } do
+	-- Rocky crags jutting out of the shell (top, shoulders, back), leaning backwards.
+	for index, spot in { V(0.55, 3.4, 0.2), V(-0.7, 3.3, 0.55), V(1.3, 2.6, 0.7), V(-1.1, 2.3, 1.25) } do
 		local point, normal = cast(shell, spot + (spot - shell.Center).Unit * 4, (shell.Center - spot).Unit)
 		if point and normal then
-			local base = point - normal * 0.2
-			local tip = point + (normal + V(0, 0.1, 0.6)).Unit * 0.42
-			b:Spike("Crag" .. index, base, tip, 1.0, 0.85, "Body", { Thickness = 0.1 }, BACK)
+			local base = point - normal * 0.3
+			local tip = point + (normal + V(0, 0.1, 0.35)).Unit * 0.42
+			b:Cone("Crag" .. index, base, tip, 0.62, "Body", { Sides = 3, Thickness = 0.1, Up = BACK })
 		end
 	end
 
-	-- Stubby legs with three white claws.
-	-- Sturdy legs: a column flaring towards the ground (open at the top, inside the shell) with three claws.
-	b:MirrorBone("Leg", V(0.88, 1.0, 0.35), nil, function()
-		local leg = serpentRings({ V(0.86, 1.45, 0.38), V(0.95, 0.12, 0.24) }, { 0.44, 0.58 }, 5, FRONT)
-		serpentPart(b, "Leg", leg, 1, 2, function(): any
-			return "Belly"
-		end)
-		claws(b, "Toe", V(0.95, 0.16, -0.28), V(0, -0.35, -1), SIDE, 3, 0.22, 0.28)
+	-- Short stubby legs on wide rounded feet with three white claws.
+	b:MirrorBone("Leg", V(0.85, 1.05, 0.3), { Amp = 0.6 }, function()
+		b:Limb("Leg", V(0.82, 1.45, 0.32), V(0.9, 0.24, 0.2), 1.0, "Belly", { RingAt = 0.55, Thickness = 0.08 })
+		b:Ball("Foot", V(1.05, 0.56, 1.2), V(0.92, 0.28, 0.12), nil, "Belly", { Detail = 0 })
+		claws(b, "Toe", V(0.92, 0.16, -0.42), V(0, -0.12, -1), SIDE, 3, 0.24, 0.3)
 	end)
-	-- Thick bent arms (elbow out) ending in three big claws.
-	b:MirrorBone("Arm", V(1.3, 2.05, -0.1), { Phase = 0.5 }, function()
-		local arm = serpentRings(
-			{ V(1.05, 2.15, -0.05), V(1.88, 1.9, -0.3), V(2.06, 1.5, -0.86), V(2.08, 1.36, -1.1) },
-			{ 0.46, 0.46, 0.38, 0 },
-			3,
-			UP
-		)
-		serpentPart(b, "Arm", arm, 1, 4, bellyFacing(UP, 2, "Belly", "Belly"))
-		claws(b, "Claw", V(2.07, 1.44, -1.02), V(0.1, -0.35, -0.9), V(1, 0, 0.25), 3, 0.24, 0.42)
+	-- Thick short arms out of the sides of the shell, hands with three stubby fingers.
+	b:MirrorBone("Arm", V(1.35, 2.1, -0.1), { Phase = 0.5 }, function()
+		local wrist = V(2.0, 1.52, -0.6)
+		b:Limb("Arm", V(1.1, 2.2, -0.05), wrist + V(0.02, -0.06, -0.06), 0.9, "Belly", { RingAt = 0.4, Thickness = 0.08 })
+		for index, dir in { V(0.32, -0.62, -0.72), V(0.02, -0.66, -0.75), V(-0.28, -0.6, -0.75) } do
+			prong(b, "Finger" .. index, wrist + dir * 0.1, wrist + dir.Unit * 0.6, 0.42, 0.42, V(0, 0.6, 1), "Belly")
+		end
 	end)
 
-	b:Bone("Head", V(0, 2.2, -0.8), nil, function()
-		local head = sculpt(b, "Head", V(1.62, 1.28, 1.5), V(0, 2.18, -1.28), nil, "Belly", { Detail = 1, Deform = domed(0.9, snout(0.14, 1.12, 0.02)) })
+	b:Bone("Head", V(0, 2.25, -0.85), nil, function()
+		local head = sculpt(
+			b,
+			"Head",
+			V(1.62, 1.26, 1.4),
+			V(0, 2.34, -1.18),
+			nil,
+			"Belly",
+			{ Detail = 1, Deform = domed(0.9, snout(0.16, 1.12, 0.02)) }
+		)
 		b:Eyes(head, 0.34, 0.1, V(0.3, 0.28, 0.2), GOLEM_EYE)
 		b:Mouth(head, -0.3, 0.74)
 		-- Heavy rock brow over the eyes.
 		for _, side in { -1, 1 } do
-			prong(b, "Brow" .. (if side < 0 then "L" else "R"), V(side * 0.78, 2.72, -1.4), V(side * 0.02, 2.56, -2.08), 0.38, 0.34, V(0, -0.4, 1), "Accent")
+			prong(
+				b,
+				"Brow" .. (if side < 0 then "L" else "R"),
+				V(side * 0.78, 2.88, -1.28),
+				V(side * 0.02, 2.72, -1.96),
+				0.38,
+				0.34,
+				V(0, -0.4, 1),
+				"Accent"
+			)
 		end
 	end)
 end
 
 -- Fox line ----------------------------------------------------------------------------------------
 
--- Fox cub: big head with huge dark-lined ears and an orange curly forelock, small body with a cream underside,
--- short legs, and six big tails fanning up behind it, each curling forwards at its light orange tip.
+-- Fox cub: big head with huge dark-lined ears and a tuft of three orange curls on the forehead, small body with a cream
+-- chest, short legs, and six fluffy tails rising behind it in a bouquet, each tail curling over at its light orange tip.
 Designs["Emberfox"] = function(b)
 	local body = lathe(
 		b,
 		"Body",
-		CFrame.new(0, 0.74, 0.32) * SIDEWAYS,
-		{ { -0.05, 0.52, 0.5, 0.02 } },
+		CFrame.new(0, 0.78, 0.32) * SIDEWAYS,
+		{ { -0.05, 0.54, 0.52, 0.02 } },
 		4,
-		V(0, -0.8, 0.1),
-		V(0, 0.72, 0.16),
+		V(0, -0.82, 0.12),
+		V(0, 0.75, 0.2),
 		function(c: Vector3): any
-			return if c.Y < 0.62 then "Belly" else "Body"
+			return if c.Y < 0.66 or c.Z < -0.2 then "Belly" else "Body"
 		end,
 		THIN,
 		0.5
 	)
 	b:SetCore(body)
-	for index, z in { 0, 0.72 } do
-		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(0.26, 0.58, z), { Phase = if index == 1 then 0 else 0.5 }, function()
-			column(b, "Leg", { V(0.25, 0.7, z), V(0.29, 0, z - 0.06) }, { 0.22, 0.14 }, { "Body" }, 1.6, THIN)
+	for index, z in { 0, 0.7 } do
+		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(0.27, 0.62, z), { Phase = if index == 1 then 0 else 0.5 }, function()
+			column(b, "Leg", { V(0.26, 0.75, z), V(0.3, 0, z - 0.06) }, { 0.24, 0.15 }, { "Body" }, 1.6, THIN)
 		end)
 	end
 
-	-- Six fluffy tails rising behind in a fan (each its own bone so they sway one after the other), their
-	-- light tips curling forwards and outwards.
-	for index, spec in { { -54, 36 }, { -32, 57 }, { -10, 75 }, { 10, 75 }, { 32, 57 }, { 54, 36 } } do
-		local az, el = math.rad(spec[1]), math.rad(spec[2])
-		local dir = V(math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el))
-		local root = V(math.sin(az) * 0.1, 0.84, 0.86)
-		local ring = root + dir * 1.12
-		local tip = ring + (dir * 0.2 + V(math.sin(az) * 0.45, 0.35, -0.8)).Unit * 0.86
+	-- Six fluffy tails rising behind in a bouquet (angle around the back axis, 0 = up), each its own bone so they sway
+	-- one after the other; every tail bends over at its tip into a light orange curl.
+	for index, theta in { -64, -38, -13, 13, 38, 64 } do
+		local t = math.rad(theta)
+		local lean = math.rad(24 + math.abs(theta) * 0.15)
+		local dir = V(math.sin(t) * math.cos(lean), math.cos(t) * math.cos(lean), math.sin(lean))
+		local out = V(math.sin(t), 0, 0.45)
+		local root = V(math.sin(t) * 0.1, 0.9, 0.8)
+		local ring = root + dir * (1.45 - math.abs(theta) * 0.004)
+		-- The curl: the tip bends over outwards / backwards and down.
+		local tip = ring + (dir * 0.3 + out + V(0, -0.6, 0)).Unit * 0.7
 		b:Bone("Tail" .. index, root, { Phase = index / 6, Amp = 0.55 }, function()
-			plume(b, "Tail", root, ring, tip, 0.34, "Body", "Accent", dir:Cross(UP) + V(0, 0.01, 0))
+			plume(b, "Tail", root, ring, tip, 0.4, "Body", "Accent", out)
 		end)
 	end
 
-	b:Bone("Head", V(0, 1.1, -0.24), nil, function()
-		local head = sculpt(b, "Head", V(1.7, 1.48, 1.5), V(0, 1.62, -0.42), nil, "Body", { Deform = domed(0.92, snout(0.24, 0.8, 0.03)) })
-		b:Eyes(head, 0.4, 0.02, V(0.42, 0.5, 0.28), FOX_EYE)
+	b:Bone("Head", V(0, 1.12, -0.24), nil, function()
+		local head = sculpt(b, "Head", V(1.72, 1.5, 1.52), V(0, 1.66, -0.42), nil, "Body", { Deform = domed(0.92, snout(0.26, 0.8, 0.04)) })
+		b:Eyes(head, 0.4, 0.04, V(0.44, 0.52, 0.28), FOX_EYE)
 		faceTri(b, "Nose", head, 0, -0.24, 0.16, 0.1, "Black")
 		b:Mouth(head, -0.4, 0.24)
-		-- Curly forelock: a big lock rising from the crown and curling forwards over the forehead.
-		plume(b, "Curl", V(0, 2.16, -0.22), V(0, 2.58, -0.64), V(0, 2.24, -1.06), 0.26, "Accent", "Accent", SIDE)
-		b:MirrorBone("Ear", V(0.45, 2.12, -0.4), nil, function()
-			local base, tip = V(0.42, 2.04, -0.4), V(1.08, 3.16, -0.28)
-			b:Spike("Ear", base, tip, 0.84, 0.34, "Body", THIN, BACK)
-			innerFace(b, "EarInner", base, tip, 0.84, 0.34, BACK, 0.62, "Extra")
+		-- Tuft of three orange curls on the forehead: the middle one rises and curls forwards over the forehead.
+		prong(b, "Curl", V(0, 2.12, -0.42), V(0, 2.74, -0.74), 0.5, 0.36, BACK, "Accent")
+		prong(b, "CurlTip", V(0, 2.62, -0.62), V(0, 2.3, -1.1), 0.42, 0.3, V(0, 1, 0.3), "Accent")
+		for _, side in { -1, 1 } do
+			prong(b, "CurlSide" .. side, V(side * 0.22, 2.2, -0.48), V(side * 0.6, 2.48, -0.92), 0.36, 0.3, V(0, -1, 0.4), "Accent")
+		end
+		b:MirrorBone("Ear", V(0.45, 2.1, -0.38), nil, function()
+			local base, tip = V(0.42, 2.02, -0.38), V(1.12, 3.1, -0.26)
+			b:Spike("Ear", base, tip, 0.86, 0.34, "Body", THIN, BACK)
+			innerFace(b, "EarInner", base, tip, 0.86, 0.34, BACK, 0.62, "Extra")
 		end)
 	end)
 end
 
--- Elegant golden fox standing tall: fluffy ruff around the neck, slender muzzle with red eyes, a lock swept back
--- from the forehead, slender legs, and nine long flowing tails fanning up behind it with orange tips.
+-- Elegant golden fox standing tall: slim body, a fluffy ruff cascading down the chest, a long pointed muzzle with calm
+-- red eyes, a big crest of fur swept back from the forehead, slender legs and nine long fluffy tails fanned out behind
+-- it like a halo, each tip curling outwards in orange.
 Designs["Novafox"] = function(b)
-	-- Body and neck in one faceted solid: its front point rises into the head.
-	local body = lathe(b, "Body", CFrame.new(0, 1.52, 0.4) * SIDEWAYS, { { -0.05, 0.56, 0.56, 0.03 } }, 4, V(0, -1.0, 0.12), V(0, 1.08, 1.32), "Body", THIN, 0.5)
+	-- Slim body; its front point rises into the neck (hidden by the ruff).
+	local body = lathe(
+		b,
+		"Body",
+		CFrame.new(0, 1.62, 0.35) * SIDEWAYS,
+		{ { -0.15, 0.58, 0.6, 0.03 } },
+		5,
+		V(0, -1.2, 0.12),
+		V(0, 1.05, 1.0),
+		"Body",
+		THIN
+	)
 	b:SetCore(body)
-	for index, z in { -0.1, 0.95 } do
-		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(0.27, 1.3, z), { Phase = if index == 1 then 0 else 0.5 }, function()
-			column(b, "Leg", { V(0.26, 1.48, z), V(0.29, 0, z - 0.08) }, { 0.2, 0.11 }, { "Body" }, 1.6, THIN)
-		end)
+	-- Slender legs: the front ones with small paws, the back ones (behind the tails) lighter struts.
+	b:MirrorBone("LegFront", V(0.3, 1.4, -0.2), nil, function()
+		column(b, "Leg", { V(0.28, 1.65, -0.2), V(0.32, 0, -0.28) }, { 0.26, 0.13 }, { "Body" }, 1.8, THIN)
+	end)
+	b:MirrorBone("LegBack", V(0.3, 1.4, 0.92), { Phase = 0.5 }, function()
+		strut(b, "Leg", V(0.28, 1.7, 0.96), V(0.33, 0, 0.8), 0.46, 0.4, V(0.3, 0, 1), "Body", 0.3)
+	end)
+	-- Fluffy ruff cascading down the chest: wide locks of fur hanging from the neck, the middle one longest.
+	for index, spec in { { 0, 0.95, 0.8 }, { 0.34, 0.72, 0.7 }, { -0.34, 0.72, 0.7 } } do
+		local x, drop, width = spec[1], spec[2], spec[3]
+		local base = V(x * 0.8, 2.4, -0.62 + math.abs(x) * 0.3)
+		prong(b, "Ruff" .. index, base, base + V(x * 0.6, -drop, -0.22 + math.abs(x) * 0.25), width, 0.56, BACK, "Body")
 	end
-	-- Fluffy ruff around the neck, longest on the chest.
-	ruff(b, "Ruff", V(0, 2.5, -0.5), V(0, 2.02, -0.42), 0.38, 4, Vector2.new(0.66, 0.4), Vector2.new(0.72, 0.3), "Body", 0.5)
 
-	-- Nine long tails fanning up behind it (azimuth from straight back, elevation), tips curling outwards.
-	local tails = { { -68, 24 }, { -48, 44 }, { -24, 62 }, { 0, 74 }, { 24, 62 }, { 48, 44 }, { 68, 24 }, { -32, 22 }, { 32, 22 } }
+	-- Nine long fluffy tails fanned out behind it like a halo (angle around the back axis, 0 = up; lean back), the
+	-- orange tips curling outwards. Each tail is its own bone so they ripple one after the other.
+	local tails = {
+		{ -92, 26, 2.2 },
+		{ -46, 28, 2.3 },
+		{ 0, 28, 2.4 },
+		{ 46, 28, 2.3 },
+		{ 92, 26, 2.2 },
+		{ -69, 50, 1.95 },
+		{ -23, 54, 2.05 },
+		{ 23, 54, 2.05 },
+		{ 69, 50, 1.95 },
+	}
 	for index, spec in tails do
-		local az, el = math.rad(spec[1]), math.rad(spec[2])
-		local dir = V(math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el))
-		local root = V(math.sin(az) * 0.12, 1.66, 1.2)
-		local low = V(dir.X, dir.Y * 0.6, dir.Z).Unit
-		local ring = root + low * 1.3
-		local tip = ring + (dir * 0.7 + V(math.sin(az) * 0.45, 0.55, 0)).Unit * 1.15
-		b:Bone("Tail" .. index, root, { Phase = index / 9, Amp = 0.45 }, function()
-			spindle(b, "Tail", root, ring, tip, 0.52, 0.42, (BACK - dir * dir.Z).Unit + V(0, -0.2, 0), "Body", "Accent")
+		local theta, lean, length = math.rad(spec[1]), math.rad(spec[2]), spec[3]
+		local dir = V(math.sin(theta) * math.cos(lean), math.cos(theta) * math.cos(lean), math.sin(lean))
+		local out = V(math.sin(theta), math.cos(theta) * 0.5, 0)
+		local root = V(math.sin(theta) * 0.1, 1.8, 1.05)
+		local ring = root + dir * (length * 0.6)
+		local tip = ring + (dir + out * 0.9).Unit * (length * 0.45)
+		b:Bone("Tail" .. index, root, { Phase = index / 9, Amp = 0.4 }, function()
+			plume(b, "Tail", root, ring, tip, 0.46, "Body", "Accent", out)
 		end)
 	end
 
-	b:Bone("Head", V(0, 2.4, -0.55), nil, function()
-		local head = sculpt(b, "Head", V(1.46, 1.3, 1.5), V(0, 2.98, -0.74), nil, "Body", { Deform = domed(0.9, snout(0.44, 0.66, 0.06)) })
-		b:Eyes(head, 0.33, 0.14, V(0.32, 0.36, 0.24), NINE_EYE)
-		faceTri(b, "Nose", head, 0, -0.26, 0.16, 0.1, "Black")
-		-- Lock of fur swept back from the forehead.
-		prong(b, "Crest", V(0, 3.34, -1.04), V(0, 3.78, 0.04), 0.46, 0.34, DOWN, "Body")
-		b:MirrorBone("Ear", V(0.4, 3.34, -0.68), nil, function()
-			local base, tip = V(0.38, 3.26, -0.68), V(0.92, 4.34, -0.5)
-			b:Spike("Ear", base, tip, 0.64, 0.3, "Body", THIN, BACK)
-			innerFace(b, "EarInner", base, tip, 0.64, 0.3, BACK, 0.6, "Accent")
+	b:Bone("Head", V(0, 2.5, -0.62), nil, function()
+		local head =
+			sculpt(b, "Head", V(1.46, 1.28, 1.48), V(0, 3.08, -0.92), nil, "Body", { Deform = domed(0.9, snout(0.62, 0.6, 0.1, 0.12)) })
+		b:Eyes(head, 0.34, 0.14, V(0.34, 0.38, 0.24), NINE_EYE)
+		faceTri(b, "Nose", head, 0, -0.3, 0.15, 0.1, "Black")
+		-- Big crest of fur swept back from the forehead.
+		prong(b, "Crest", V(0, 3.4, -1.15), V(0, 4.05, 0.1), 0.56, 0.4, DOWN, "Body")
+		-- Tall thin ears (flat plates) with orange insides.
+		b:MirrorBone("Ear", V(0.38, 3.4, -0.82), nil, function()
+			local base, tip = V(0.36, 3.32, -0.84), V(0.86, 4.4, -0.66)
+			b:Spike("Ear", base, tip, 0.64, 0.12, "Body", { Thickness = 0.12 }, V(0, 0.2, -1))
+			b:Spike("EarInner", base + V(0.02, 0.1, -0.08), tip + V(-0.04, -0.2, -0.07), 0.4, 0.06, "Accent", THIN, V(0, 0.2, -1))
 		end)
 	end)
 end
@@ -1040,15 +1100,16 @@ Designs["Lagoonie"] = function(b)
 		local neck = serpentRings({ V(0, 0.9, -0.55), V(0, 2.02, -0.88), V(0, 2.92, -1.26) }, { 0.58, 0.46, 0.4 }, 5, FRONT)
 		serpentPart(b, "Neck", neck, 1, 3, bellyFacing(V(0, -0.1, -1), 0.5))
 		b:Bone("Head", V(0, 2.9, -1.1), nil, function()
-			local head = sculpt(b, "Head", V(1.55, 1.3, 1.65), V(0, 3.42, -1.3), nil, "Body", { Deform = snout(0.2, 0.95) })
-			b:Eyes(head, 0.38, 0.1, V(0.34, 0.42, 0.24), "Black")
-			b:Mouth(head, -0.36, 0.52)
+			local head =
+				sculpt(b, "Head", V(1.52, 1.32, 1.7), V(0, 3.45, -1.32), nil, "Body", { Deform = domed(0.9, snout(0.32, 0.9, 0.04)) })
+			b:Eyes(head, 0.36, 0.14, V(0.38, 0.46, 0.26), "Black")
+			b:Mouth(head, -0.3, 0.46)
 			-- Horn curling backwards.
 			prong(b, "Horn", V(0, 3.95, -1.5), V(0, 4.5, -1.42), 0.32, 0.26, BACK, "Body")
 			prong(b, "HornTip", V(0, 4.4, -1.42), V(0, 4.62, -1.05), 0.24, 0.2, DOWN, "Body")
 			-- Ear flaps swept back.
-			b:MirrorBone("Ear", V(0.58, 3.65, -1.15), nil, function()
-				prong(b, "Ear", V(0.55, 3.62, -1.15), V(1.12, 3.9, -0.62), 0.44, 0.2, DOWN, "Body")
+			b:MirrorBone("Ear", V(0.52, 3.74, -1.18), nil, function()
+				prong(b, "Ear", V(0.52, 3.68, -1.2), V(1.02, 3.92, -0.5), 0.46, 0.24, DOWN, "Body")
 			end)
 		end)
 	end)

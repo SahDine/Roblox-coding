@@ -176,9 +176,10 @@ function Landmarks.Portal(parent: Instance, position: Vector3, halfOpening: numb
 		LowPoly.DrawTriangles(hexahedron(corners, skip), facets("ArchStone", tint, Enum.Material.Slate, true), model, 0.3)
 	end
 
-	-- Rune gems on both faces of the keystone.
+	-- Rune gems on both faces of the keystone (plates centred on their plane: lifted by half their
+	-- thickness so they lie on the stone instead of sinking into it).
 	for _, side in { -1, 1 } do
-		local w = side * (half + 0.3)
+		local w = side * (half + 0.3 + 0.07)
 		local y = ARCH_SPRING + outer - 0.6
 		LowPoly.DrawTriangles({
 			{ A = at(0, y + 1, w), B = at(-0.8, y, w), C = at(0, y - 1, w) },
@@ -305,7 +306,14 @@ end
 
 -- Side band of a prism from `bottom` to `top` (no caps): the top ring is turned by half a step so
 -- every facet is a triangle.
-local function prismSides(bottom: Vector3, top: Vector3, radius: number, topRadius: number, sides: number, twist: number): (Triangles, { [number]: Vector3 })
+local function prismSides(
+	bottom: Vector3,
+	top: Vector3,
+	radius: number,
+	topRadius: number,
+	sides: number,
+	twist: number
+): (Triangles, { [number]: Vector3 })
 	local axis = (top - bottom).Unit
 	local u, v = LowPoly.Perpendiculars(axis, Vector3.new(math.cos(twist), 0, math.sin(twist)))
 	local low, high = {}, {}
@@ -416,7 +424,14 @@ function Landmarks.Fountain(parent: Instance, center: Vector3, color: Color3): M
 	local bowlTop, bowlBottom, bowlRadius = 5.6, 4.2, 3.2
 	LowPoly.DrawTriangles(
 		-- Ring turned like the water fans (first vertex towards +X).
-		LowPoly.ConeTriangles(center + Vector3.new(0, bowlTop, 0), center + Vector3.new(0, bowlBottom, 0), bowlRadius, sides, false, Vector3.xAxis),
+		LowPoly.ConeTriangles(
+			center + Vector3.new(0, bowlTop, 0),
+			center + Vector3.new(0, bowlBottom, 0),
+			bowlRadius,
+			sides,
+			false,
+			Vector3.xAxis
+		),
 		facets("Bowl", STONE, Enum.Material.Slate),
 		model,
 		0.2
@@ -503,12 +518,7 @@ function Landmarks.GuardianStatue(parent: Instance, base: Vector3, facing: Vecto
 	local head = frame * CFrame.new(0, y0 + 4.7, -0.4)
 	local headMesh = LowPoly.TransformMesh(LowPoly.Icosahedron(), head, Vector3.new(2.9, 2.6, 2.7))
 	LowPoly.DrawTriangles(LowPoly.MeshTriangles(headMesh, head.Position), stone, model, 0.2)
-	LowPoly.DrawTriangles(
-		LowPoly.ConeTriangles(at(0, y0 + 4.3, -1), at(0, y0 + 4.1, -2.6), 0.7, 4, false),
-		stone,
-		model,
-		0.15
-	)
+	LowPoly.DrawTriangles(LowPoly.ConeTriangles(at(0, y0 + 4.3, -1), at(0, y0 + 4.1, -2.6), 0.7, 4, false), stone, model, 0.15)
 	for _, side in { -1, 1 } do
 		LowPoly.DrawTriangles(
 			LowPoly.ConeTriangles(at(side * 0.7, y0 + 5.2, -0.3), at(side * 1.2, y0 + 7, -0.1), 0.5, 3, true),
@@ -784,14 +794,33 @@ function Landmarks.Ruins(parent: Instance, center: Vector3, yaw: number, seed: n
 	column(model, at(4.5, -4.5), height, false, rng)
 	column(model, at(-4.5, 4.5), 5.2, true, rng)
 	column(model, at(4.5, 4.5), 2.6, true, rng)
-	-- Lintel resting on the two capitals.
-	Decor.Part({
-		Name = "Lintel",
-		Size = Vector3.new(11.6, 1.2, 2.3),
-		CFrame = frame * CFrame.new(0, height + 0.7 + 0.6, -4.5),
-		Color = STONE,
-		Material = Enum.Material.Slate,
-	}, model)
+	-- Rough-hewn lintel resting on the two capitals: its bottom face is flat (it lies on them), the
+	-- other corners are chipped a little so every face breaks into two facets.
+	local lintelBottom, halfLength, halfDepth = height + 0.7, 5.8, 1.15
+	local corners = {}
+	for index, sign in
+		{
+			Vector3.new(-1, -1, -1),
+			Vector3.new(1, -1, -1),
+			Vector3.new(1, 1, -1),
+			Vector3.new(-1, 1, -1),
+			Vector3.new(-1, -1, 1),
+			Vector3.new(1, -1, 1),
+			Vector3.new(1, 1, 1),
+			Vector3.new(-1, 1, 1),
+		}
+	do
+		local chip = if sign.Y > 0
+			then Vector3.new(rng:NextNumber(-0.3, 0.1), rng:NextNumber(-0.25, 0.05), rng:NextNumber(-0.2, 0.05))
+			else Vector3.zero
+		local point = Vector3.new(
+			sign.X * (halfLength + chip.X),
+			lintelBottom + (if sign.Y > 0 then 1.2 + chip.Y else 0),
+			-4.5 + sign.Z * (halfDepth + chip.Z)
+		)
+		corners[index] = frame:PointToWorldSpace(point)
+	end
+	Decor.DrawShaded(hexahedron(corners), facets("Lintel", STONE, Enum.Material.Slate, true), model, 0.25, rng, 0.05)
 	local vine = facets("Vine", Color3.fromRGB(92, 160, 84))
 	vine.Thickness = 0.06
 	vine.CastShadow = false

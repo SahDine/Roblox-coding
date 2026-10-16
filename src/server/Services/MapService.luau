@@ -330,7 +330,8 @@ local function buildConveyor(folder: Folder)
 			Decor.Part({
 				Name = "Rune",
 				Size = Vector3.new(0.6, 0.06, MAP.ConveyorWidth * 0.35),
-				CFrame = CFrame.new(x, MapService.BeltHeight + 0.03, side * MAP.ConveyorWidth * 0.17) * CFrame.Angles(0, math.rad(side * 35), 0),
+				CFrame = CFrame.new(x, MapService.BeltHeight + 0.03, side * MAP.ConveyorWidth * 0.17)
+					* CFrame.Angles(0, math.rad(side * 35), 0),
 				Color = MAGIC,
 				Material = Enum.Material.Neon,
 				CanCollide = false,
@@ -537,7 +538,7 @@ local function buildGardens(decor: Folder)
 				end
 				for _, dx in { -1, 1 } do
 					gardenBed(x + dx * 16, side * 23.5, 4)
-					Flora.FlowerPatch(gardens, Vector3.new(x + dx * 16, 0, side * 23.5), 3, 6, seed + dx)
+					Flora.FlowerPatch(gardens, Vector3.new(x + dx * 16, 0, side * 23.5), 3, 5, seed + dx)
 				end
 				-- A bush on one side (alternating from one garden to the next).
 				local flip = if (column + (if side > 0 then 1 else 0)) % 2 == 0 then 1 else -1
@@ -564,7 +565,7 @@ local function buildGardens(decor: Folder)
 		for _, side in { -1, 1 } do
 			seed += 1
 			if isFree(x, side * 84, 0.5) then
-				Flora.FlowerPatch(gardens, Vector3.new(x, 0, side * 84), 1.6, 5, seed)
+				Flora.FlowerPatch(gardens, Vector3.new(x, 0, side * 84), 1.4, 3, seed)
 			end
 		end
 	end
@@ -594,7 +595,8 @@ local function buildForest(decor: Folder)
 				elseif pick == 5 then
 					Flora.CrystalCluster(forest, base, rng:NextNumber(1.1, 1.4), index, CRYSTAL_COLORS[index % #CRYSTAL_COLORS + 1])
 				else
-					Flora.Pine(forest, base, rng:NextNumber(1.5, 2.2), index)
+					-- Four-sided tiers on the back row (seen from further away) to save parts.
+					Flora.Pine(forest, base, rng:NextNumber(1.5, 2.2), index, nil, if front then 5 else 4)
 				end
 			end
 			-- Undergrowth between the trees, on the other row.
@@ -750,14 +752,14 @@ local function buildHorizon(decor: Folder)
 
 	-- Floating islands: two pour their waterfalls into the east ponds, two float over the forest.
 	local northPond, southPond = PONDS[1], PONDS[2]
-	Horizon.FloatingIsland(sky, northPond + Vector3.new(0, 62, 28), 0.9, 970, Vector3.new(0, 0, -1), 0, CRYSTAL_COLORS[1])
-	Horizon.FloatingIsland(sky, southPond + Vector3.new(0, 66, -28), 0.9, 971, Vector3.new(0, 0, 1), 0, CRYSTAL_COLORS[3])
+	Horizon.FloatingIsland(sky, northPond + Vector3.new(0, 62, 28), 0.9, 970, Vector3.new(0, 0, -1), 0)
+	Horizon.FloatingIsland(sky, southPond + Vector3.new(0, 66, -28), 0.9, 971, Vector3.new(0, 0, 1), 0)
 	-- The waterfalls of the forest islands land on the hills (the foot is ~16 studs out per unit of scale).
 	local halfD = MapService.HalfDepth
 	for index, island in
 		{
-			{ Center = Vector3.new(-120, 92, halfD + 40), Scale = 1.2, Fall = Vector3.new(0.6, 0, -0.8).Unit },
-			{ Center = Vector3.new(80, 100, -halfD - 45), Scale = 1.3, Fall = Vector3.new(-0.5, 0, 0.85).Unit },
+			{ Center = Vector3.new(-120, 84, halfD + 40), Scale = 1.2, Fall = Vector3.new(0.6, 0, -0.8).Unit },
+			{ Center = Vector3.new(80, 90, -halfD - 45), Scale = 1.3, Fall = Vector3.new(-0.5, 0, 0.85).Unit },
 		}
 	do
 		local foot = island.Center + island.Fall * 16 * island.Scale
