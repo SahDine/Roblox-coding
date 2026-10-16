@@ -1032,45 +1032,58 @@ local function foxLegs(b, frontZ: number, backZ: number, spacing: number, hipY: 
 	end
 end
 
--- Fox cub: big head with huge dark-lined ears and a curly orange forelock, cream chest, short legs with dark
--- paws, and six tails fanning out behind it, each curling forwards at its light orange tip.
+-- Fox cub: big head with huge dark-lined ears and an orange curly forelock, small body with a cream underside,
+-- short legs, and six tails fanning up behind it, each curling forwards at its light orange tip.
 Designs["Emberfox"] = function(b)
-	-- Body: a five-sided bipyramid lying along Z (mostly hidden between the head and the tails).
-	local body = sculpt(b, "Body", V(1.26, 1.7, 1.16), V(0, 0.98, 0.3), V(90, 0, 0), "Body", {
-		Ring = 5,
-		Twist = 0.5,
-		Paint = function(normal: Vector3): any
-			return if normal.Y < -0.45 or (normal.Z < -0.55 and normal.Y < 0.3) then "Belly" else nil
+	local body = lathe(
+		b,
+		"Body",
+		CFrame.new(0, 0.92, 0.38) * SIDEWAYS,
+		{ { -0.45, 0.5, 0.44 }, { 0.32, 0.52, 0.48, 0.04 } },
+		4,
+		V(0, -0.82, 0.06),
+		V(0, 0.75, 0.2),
+		function(c: Vector3): any
+			return if c.Y < 0.78 then "Belly" else "Body"
 		end,
-	})
+		THIN,
+		0.5
+	)
 	b:SetCore(body)
-	foxLegs(b, -0.12, 0.72, 0.34, 0.78, 0.44, "Extra")
-
-	-- Six fluffy tails rising behind in a fan (each its own bone so they sway one after the other), their
-	-- light tips curling forwards and outwards.
-	for index, spec in { { -64, 26 }, { -38, 50 }, { -13, 68 }, { 13, 68 }, { 38, 50 }, { 64, 26 } } do
-		local az, el = math.rad(spec[1]), math.rad(spec[2])
-		local dir = V(math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el))
-		local root = V(math.sin(az) * 0.12, 1.15, 0.9)
-		local ring = root + dir * 0.82
-		local tip = ring + (dir * 0.45 + V(math.sin(az) * 0.3, 0.3, -0.8)).Unit * 0.78
-		b:Bone("Tail" .. index, root, { Phase = index / 6, Amp = 0.55 }, function()
-			plume(b, "Tail", root, ring, tip, 0.3, "Body", "Accent", dir:Cross(UP) + V(0, 0.01, 0))
+	for index, z in { -0.02, 0.8 } do
+		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(0.27, 0.78, z), { Phase = if index == 1 then 0 else 0.5 }, function()
+			column(b, "Leg", { V(0.27, 0.85, z), V(0.3, 0, z - 0.06) }, { 0.2, 0.12 }, { "Body" }, 1.7, THIN)
 		end)
 	end
 
-	b:Bone("Head", V(0, 1.38, -0.32), nil, function()
+	-- Six fluffy tails rising behind in a fan (each its own bone so they sway one after the other), their
+	-- light tips curling forwards and outwards.
+	for index, spec in { { -62, 28 }, { -36, 50 }, { -12, 66 }, { 12, 66 }, { 36, 50 }, { 62, 28 } } do
+		local az, el = math.rad(spec[1]), math.rad(spec[2])
+		local dir = V(math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el))
+		local root = V(math.sin(az) * 0.1, 1.02, 1.0)
+		local ring = root + dir * 0.78
+		local tip = ring + (dir * 0.3 + V(math.sin(az) * 0.35, 0.25, -0.9)).Unit * 0.72
+		b:Bone("Tail" .. index, root, { Phase = index / 6, Amp = 0.55 }, function()
+			plume(b, "Tail", root, ring, tip, 0.27, "Body", "Accent", dir:Cross(UP) + V(0, 0.01, 0))
+		end)
+	end
+
+	b:Bone("Head", V(0, 1.35, -0.3), nil, function()
 		local head = sculpt(b, "Head", V(1.7, 1.48, 1.5), V(0, 1.88, -0.5), nil, "Body", { Deform = domed(0.92, snout(0.24, 0.8, 0.03)) })
-		b:Eyes(head, 0.4, 0.02, V(0.42, 0.5, 0.26), FOX_EYE)
-		b:FaceDot("Nose", head, 0, -0.26, V(0.17, 0.12, 0.12), "Black")
-		b:Mouth(head, -0.4, 0.22)
-		-- Curly forelock: three orange locks rising from the crown and falling over the forehead.
-		prong(b, "Curl", V(0, 2.56, -0.36), V(0, 2.4, -1.2), 0.56, 0.38, UP, "Accent")
+		b:Eyes(head, 0.4, 0.02, V(0.42, 0.5, 0.28), FOX_EYE)
+		faceTri(b, "Nose", head, 0, -0.24, 0.16, 0.1, "Black")
+		b:Mouth(head, -0.4, 0.24)
+		-- Curly forelock: a big lock curling forwards over the forehead and a smaller one on each side.
+		prong(b, "Curl", V(0, 2.5, -0.5), V(0, 2.82, -0.95), 0.5, 0.34, BACK + DOWN, "Accent")
+		prong(b, "CurlTip", V(0, 2.8, -0.9), V(0, 2.5, -1.22), 0.4, 0.28, BACK, "Accent")
 		for _, side in { -1, 1 } do
-			prong(b, "CurlSide" .. (if side < 0 then "L" else "R"), V(side * 0.3, 2.5, -0.32), V(side * 0.62, 2.26, -1.08), 0.44, 0.3, UP, "Accent")
+			prong(b, "CurlSide" .. (if side < 0 then "L" else "R"), V(side * 0.28, 2.48, -0.45), V(side * 0.56, 2.66, -1.02), 0.38, 0.26, BACK + DOWN, "Accent")
 		end
-		b:MirrorBone("Ear", V(0.45, 2.4, -0.48), nil, function()
-			foxEar(b, V(0.4, 2.34, -0.48), V(1.02, 3.36, -0.36), 0.74, 0.3, "Body", "Extra")
+		b:MirrorBone("Ear", V(0.45, 2.38, -0.48), nil, function()
+			local base, tip = V(0.42, 2.3, -0.48), V(1.08, 3.42, -0.36)
+			b:Spike("Ear", base, tip, 0.84, 0.34, "Body", THIN, BACK)
+			innerFace(b, "EarInner", base, tip, 0.84, 0.34, BACK, 0.62, "Extra")
 		end)
 	end)
 end

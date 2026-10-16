@@ -976,18 +976,38 @@ end
 	classic notch in the fourth quarter (3 parts each); every other pad carries a water lily (four
 	pointed petals around a glowing heart, 9 parts).
 ]]
-function Landmarks.LilyPads(parent: Instance, center: Vector3, radius: number, count: number, seed: number): Model
+function Landmarks.LilyPads(parent: Instance, center: Vector3, radius: number, count: number, seed: number, avoid: { Vector3 }?): Model
 	local rng = Decor.Rng(seed)
 	local model = newModel("LilyPads", parent)
+	-- Random spot on the pond at least 4 studs from every point of `avoid` (stepping stones...).
+	local function spot(): Vector3?
+		for _ = 1, 6 do
+			local angle = rng:NextNumber(0, math.pi * 2)
+			local distance = math.sqrt(rng:NextNumber(0, 1)) * radius
+			local hub = center + Vector3.new(math.cos(angle) * distance, 0.08, math.sin(angle) * distance)
+			local clear = true
+			for _, point in avoid or {} do
+				if Vector3.new(hub.X - point.X, 0, hub.Z - point.Z).Magnitude < 4 then
+					clear = false
+					break
+				end
+			end
+			if clear then
+				return hub
+			end
+		end
+		return nil
+	end
 	local petal = facets("Lily", Color3.fromRGB(255, 196, 224))
 	petal.CastShadow = false
 	petal.Thickness = 0.06
 	local heart = glowProps("LilyHeart", Color3.fromRGB(255, 226, 120))
 	heart.Thickness = 0.06
 	for index = 1, count do
-		local angle = rng:NextNumber(0, math.pi * 2)
-		local distance = math.sqrt(rng:NextNumber(0, 1)) * radius
-		local hub = center + Vector3.new(math.cos(angle) * distance, 0.08, math.sin(angle) * distance)
+		local hub = spot()
+		if not hub then
+			continue
+		end
 		local size = rng:NextNumber(1.3, 2)
 		local turn = rng:NextNumber(0, math.pi * 2)
 		local pad = facets("LilyPad", LILY:Lerp(WHITE, rng:NextNumber(0, 0.12)))
