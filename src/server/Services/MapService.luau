@@ -277,8 +277,10 @@ local function buildTerrain()
 		)
 	end
 
-	-- Spawn courtyard.
-	terrain:FillCylinder(CFrame.new(MapService.SpawnPosition - Vector3.new(0, 2, 0)), 4, SPAWN_RADIUS, Enum.Material.Pavement)
+	-- Spawn courtyard: pale paving edged with a ring of cobblestones.
+	local courtyard = CFrame.new(MapService.SpawnPosition - Vector3.new(0, 2, 0))
+	terrain:FillCylinder(courtyard, 4, SPAWN_RADIUS + 3, Enum.Material.Cobblestone)
+	terrain:FillCylinder(courtyard, 4, SPAWN_RADIUS, Enum.Material.Pavement)
 
 	-- Ponds at both ends of the plaza (surface at y = 0) with a pale sandy shore.
 	for _, pond in PONDS do
@@ -504,6 +506,11 @@ end
 
 -- Gardens, forest and the two ends ------------------------------------------------------------
 
+-- Bare-earth bed under a garden feature (terrain only: it costs no part).
+local function gardenBed(x: number, z: number, radius: number)
+	workspace.Terrain:FillCylinder(CFrame.new(x, -2, z), 4, radius, Enum.Material.Ground)
+end
+
 -- Gardens in the strip between the plaza and the bases, between the dirt paths.
 local function buildGardens(decor: Folder)
 	local gardens = Instance.new("Folder")
@@ -518,7 +525,8 @@ local function buildGardens(decor: Folder)
 			seed += 10
 			local z = side * 26
 			if column > 0 and column < perSide then
-				-- Centre piece: a cherry tree, a crystal tree or a round tree.
+				-- Centre piece: a cherry tree, a crystal tree or a round tree, on a round bed.
+				gardenBed(x, z, 5.5)
 				local kind = (column + (if side > 0 then 0 else 1)) % 3
 				if kind == 0 then
 					Flora.CherryTree(gardens, Vector3.new(x, 0, z), 1, seed)
@@ -528,12 +536,12 @@ local function buildGardens(decor: Folder)
 					Flora.RoundTree(gardens, Vector3.new(x, 0, z), 1, seed)
 				end
 				for _, dx in { -1, 1 } do
+					gardenBed(x + dx * 16, side * 23.5, 4)
 					Flora.FlowerPatch(gardens, Vector3.new(x + dx * 16, 0, side * 23.5), 3, 6, seed + dx)
 				end
-				-- A bush on one side, a grass tuft on the other (alternating from one garden to the next).
+				-- A bush on one side (alternating from one garden to the next).
 				local flip = if (column + (if side > 0 then 1 else 0)) % 2 == 0 then 1 else -1
 				Flora.Bush(gardens, Vector3.new(x + flip * 25, 0, side * 27), 1.1, seed + 3)
-				Flora.Grass(gardens, Vector3.new(x - flip * 24, 0, side * 22), 1.6, 5, seed + 5)
 			else
 				-- Outer gardens next to the portals: a fenced flower meadow and a cherry tree. On the
 				-- spawn side the fence stops before the rare-spawn board and the spawn courtyard.
@@ -628,13 +636,29 @@ local function buildEnds(decor: Folder)
 		local east = pond.X > 0
 		local outward = math.sign(pond.Z)
 		local away = if east then 1 else -1
-		Landmarks.LilyPads(ends, pond, POND_RADIUS - 5, 4, seed)
+		-- The south-east pond is crossed on stepping stones, the north-east one on a bridge (lily
+		-- pads float under it), the west ones have a jetty on their side facing the plaza.
+		local stones, jetty = {}, {}
+		local shore = pond - Vector3.new(0, 0, outward * (POND_RADIUS + 1.5))
+		if east and outward < 0 then
+			for k = 0, 7 do
+				local t = k / 7
+				table.insert(stones, pond + Vector3.new((t - 0.5) * 38, 0, math.sin(t * math.pi) * 5))
+			end
+		elseif not east then
+			for k = 0, 3 do
+				table.insert(jetty, shore + Vector3.new(0, 0, outward * (2 + k * 3)))
+			end
+		end
+		Landmarks.LilyPads(ends, pond, POND_RADIUS - 4, 6, seed, if east then stones else jetty)
 		-- Reeds and rocks on the rim, away from the bridge / stepping stones that cross the east
-		-- ponds along X.
+		-- ponds along X and from the jetty of the west ponds (on their side facing the plaza).
 		local function rimPoint(angle: number, radius: number): Vector3
 			local a = angle
 			if east and math.abs(math.sin(a)) < 0.45 then
 				a += if math.sin(a) >= 0 then 1 else -1
+			elseif not east and math.sin(a) * outward < -0.75 then
+				a += 1.4
 			end
 			return pond + Vector3.new(math.cos(a), 0, math.sin(a)) * radius
 		end
@@ -643,17 +667,12 @@ local function buildEnds(decor: Folder)
 			Flora.Reeds(ends, rimPoint(angle, POND_RADIUS + 0.5), 2.4, 6, seed + k)
 			Flora.Boulder(ends, rimPoint(angle + 1.1, POND_RADIUS + 1.5), Vector3.new(3.8, 2.4, 3.4), seed + k, nil, k == 0)
 		end
-		if east then
-			if outward > 0 then
-				Landmarks.Bridge(ends, pond - Vector3.new(POND_RADIUS + 3, 0, 0), pond + Vector3.new(POND_RADIUS + 3, 0, 0), 5, 3.5)
-			else
-				local stones = {}
-				for k = 0, 7 do
-					local t = k / 7
-					table.insert(stones, pond + Vector3.new((t - 0.5) * 38, 0, math.sin(t * math.pi) * 5))
-				end
-				Landmarks.SteppingStones(ends, stones, seed)
-			end
+		if #stones > 0 then
+			Landmarks.SteppingStones(ends, stones, seed)
+		elseif east then
+			Landmarks.Bridge(ends, pond - Vector3.new(POND_RADIUS + 3, 0, 0), pond + Vector3.new(POND_RADIUS + 3, 0, 0), 5, 3.5)
+		else
+			Landmarks.Jetty(ends, shore, shore + Vector3.new(0, 0, outward * 11), 3.6, seed + 7)
 		end
 		-- A cherry tree and a pine on the outer side of the pond.
 		local cherry = pond + Vector3.new(-14 * away, 0, 30 * outward)
@@ -717,15 +736,16 @@ local function buildHorizon(decor: Folder)
 		Horizon.Mountain(sky, position, radius, height, 900 + index, height > 115, 5)
 	end
 
+	-- Big clouds drifting above the forest, in front of the mountains.
 	for index, cloud in
 		{
-			Vector3.new(-150, 130, 120),
-			Vector3.new(130, 150, -110),
-			Vector3.new(270, 125, 150),
-			Vector3.new(-290, 140, -160),
+			Vector3.new(-150, 150, 205),
+			Vector3.new(140, 160, -215),
+			Vector3.new(330, 140, 120),
+			Vector3.new(-340, 150, -130),
 		}
 	do
-		Horizon.Cloud(sky, cloud, rng:NextNumber(1.4, 1.9), 950 + index)
+		Horizon.Cloud(sky, cloud, rng:NextNumber(2.2, 2.8), 950 + index)
 	end
 
 	-- Floating islands: two pour their waterfalls into the east ponds, two float over the forest.
@@ -761,9 +781,9 @@ local function buildDecor(folder: Folder)
 			Decor.Fireflies(decor, Vector3.new(x, 5, side * 25), Vector3.new(if math.abs(x) > 150 then 30 else 48, 6, 10))
 		end
 	end
-	for x = -MapService.HalfWidth + 40, MapService.HalfWidth - 40, 80 do
+	for x = -MapService.HalfWidth + 60, MapService.HalfWidth - 60, 115 do
 		for _, side in { -1, 1 } do
-			Decor.Fireflies(decor, Vector3.new(x, 6, side * (PLOT_BACK + 26)), Vector3.new(60, 8, 16))
+			Decor.Fireflies(decor, Vector3.new(x, 6, side * (PLOT_BACK + 26)), Vector3.new(100, 8, 16))
 		end
 	end
 end

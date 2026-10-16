@@ -937,6 +937,47 @@ function Landmarks.Bridge(parent: Instance, from: Vector3, to: Vector3, width: n
 end
 
 --[[
+	Small wooden jetty from the shore point `from` out over the water to `to` (points on the water
+	surface): a walkable plank deck 0.55 above the water and two pairs of mooring posts beside it
+	(~12 parts).
+]]
+function Landmarks.Jetty(parent: Instance, from: Vector3, to: Vector3, width: number, seed: number): Model
+	local rng = Decor.Rng(seed)
+	local model = newModel("Jetty", parent)
+	local flat = Vector3.new(to.X - from.X, 0, to.Z - from.Z)
+	local length = flat.Magnitude
+	local along = flat.Unit
+	local across = along:Cross(Vector3.yAxis)
+	local deckTop = 0.55
+	local planks = math.max(2, math.floor(length / 1.3))
+	local step = length / planks
+	for index = 0, planks - 1 do
+		local center = from + along * (step * (index + 0.5)) + Vector3.new(0, deckTop - 0.15, 0)
+		Decor.Part({
+			Name = "Plank",
+			Size = Vector3.new(width + rng:NextNumber(-0.3, 0.3), 0.3, step - 0.12),
+			CFrame = CFrame.lookAt(center, center + along) * CFrame.Angles(0, rng:NextNumber(-0.03, 0.03), 0),
+			Color = if index % 2 == 0 then WOOD else WOOD:Lerp(WOOD_DARK, 0.35),
+			Material = Enum.Material.WoodPlanks,
+		}, model)
+	end
+	-- Posts beside the deck (not under it), halfway and at the far end.
+	for _, t in { 0.5, 1 } do
+		for _, side in { -1, 1 } do
+			local foot = from + along * (length * t - 0.4) + across * side * (width / 2 + 0.45)
+			Decor.Part({
+				Name = "Post",
+				Size = Vector3.new(0.45, 2.6 + rng:NextNumber(-0.2, 0.2), 0.45),
+				CFrame = CFrame.new(foot + Vector3.new(0, 0.3, 0)) * CFrame.Angles(0, math.rad(45), 0),
+				Color = WOOD_DARK,
+				Material = Enum.Material.Wood,
+			}, model)
+		end
+	end
+	return model
+end
+
+--[[
 	Stones to hop across a pond (`points` on the water surface): an almost flat, walkable top (a very
 	shallow pyramid 0.35-0.55 above the water) on a steep skirt plunging into the water (2 triangles
 	per side, ~20-24 parts each). Collidable; a few top facets are mossy.
@@ -980,13 +1021,14 @@ function Landmarks.LilyPads(parent: Instance, center: Vector3, radius: number, c
 	local rng = Decor.Rng(seed)
 	local model = newModel("LilyPads", parent)
 	-- Random spot on the pond at least 4 studs from every point of `avoid` (stepping stones...).
+	local keepOut: { Vector3 } = avoid or {}
 	local function spot(): Vector3?
 		for _ = 1, 6 do
 			local angle = rng:NextNumber(0, math.pi * 2)
 			local distance = math.sqrt(rng:NextNumber(0, 1)) * radius
 			local hub = center + Vector3.new(math.cos(angle) * distance, 0.08, math.sin(angle) * distance)
 			local clear = true
-			for _, point in avoid or {} do
+			for _, point in keepOut do
 				if Vector3.new(hub.X - point.X, 0, hub.Z - point.Z).Magnitude < 4 then
 					clear = false
 					break

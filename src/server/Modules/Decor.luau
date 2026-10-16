@@ -79,7 +79,7 @@ function Decor.Fireflies(parent: Instance, position: Vector3, area: Vector3, col
 	local emitter = Instance.new("ParticleEmitter")
 	emitter.Color = ColorSequence.new(color or Color3.fromRGB(255, 240, 140))
 	emitter.LightEmission = 1
-	emitter.Rate = 6
+	emitter.Rate = math.clamp(area.X * area.Z / 160, 2, 12) -- about the same density in every volume
 	emitter.Lifetime = NumberRange.new(3, 6)
 	emitter.Speed = NumberRange.new(0.3, 1)
 	emitter.SpreadAngle = Vector2.new(180, 180)

@@ -151,7 +151,7 @@ end
 
 --[[
 	Cheap pine silhouette for the hills behind the invisible walls, seen only from afar: two
-	five-sided tiers and no trunk (20 parts).
+	four-sided tiers and no trunk (16 parts).
 ]]
 function Flora.FarPine(parent: Instance, base: Vector3, scale: number, seed: number): Model
 	local rng = Decor.Rng(seed)
@@ -163,7 +163,7 @@ function Flora.FarPine(parent: Instance, base: Vector3, scale: number, seed: num
 	local y, radius = 0.6 * s, rng:NextNumber(4.4, 5) * s
 	for tier = 1, 2 do
 		local height = (if tier == 1 then 7.4 else 5.8) * s
-		local triangles = LowPoly.ConeTriangles(base + Vector3.new(0, y, 0), base + Vector3.new(0, y + height, 0), radius, 5, false, randomFlat(rng))
+		local triangles = LowPoly.ConeTriangles(base + Vector3.new(0, y, 0), base + Vector3.new(0, y + height, 0), radius, 4, false, randomFlat(rng))
 		props.Color = color:Lerp(WHITE, tier * 0.05)
 		Decor.DrawShaded(triangles, props, model, Decor.Thickness(radius * 0.4), rng, 0.05)
 		y += height * 0.5

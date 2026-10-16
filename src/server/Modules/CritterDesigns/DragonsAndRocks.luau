@@ -121,46 +121,6 @@ local function groundSafe(vertices: { Vector3 }, faces: { { number } }, floor: n
 	return out
 end
 
--- Custom mesh standing on the ground (feet): facets whose boxes would dip below the floor are split.
-local function groundMesh(b, name: string, vertices: { Vector3 }, faces: { { number } }, color: any, opts: any?)
-	local points = table.clone(vertices)
-	return b:Mesh(name, points, groundSafe(points, faces, -0.09), color, opts)
-end
-
---[[
-	Flat foot on the ground: a sole triangle (toe in front, two heel corners) under an ankle point set back
-	and raised. 3 facets (~6 parts). center = middle of the sole, size = (width, ankle height, length).
-]]
-local function soleFoot(b, name: string, center: Vector3, size: Vector3, color: any, opts: any?)
-	local h = size / 2
-	local y = 0.02
-	local vertices = {
-		V(center.X, y, center.Z - h.Z),
-		V(center.X + h.X, y, center.Z + h.Z * 0.7),
-		V(center.X - h.X, y, center.Z + h.Z * 0.7),
-		V(center.X, size.Y, center.Z + h.Z * 0.35),
-	}
-	return groundMesh(b, name, vertices, { { 1, 2, 4 }, { 2, 3, 4 }, { 3, 1, 4 } }, color, opts)
-end
-
---[[
-	Closed paw / foot: a ring of 3 points (toe in front, two heel corners) at `ringAt` of its height, an ankle
-	point on top (set back a little) and a sole point below. 6 facets (~12 parts).
-]]
-local function bean(b, name: string, center: Vector3, size: Vector3, color: any, opts: any?, ringAt: number?)
-	local h = size / 2
-	local y = center.Y - h.Y + size.Y * (ringAt or 0.35)
-	local vertices = {
-		V(center.X, y, center.Z - h.Z),
-		V(center.X + h.X, y, center.Z + h.Z * 0.55),
-		V(center.X - h.X, y, center.Z + h.Z * 0.55),
-		V(center.X, center.Y + h.Y, center.Z + h.Z * 0.25),
-		V(center.X, center.Y - h.Y, center.Z),
-	}
-	local faces = { { 1, 2, 4 }, { 2, 3, 4 }, { 3, 1, 4 }, { 2, 1, 5 }, { 3, 2, 5 }, { 1, 3, 5 } }
-	return b:Mesh(name, vertices, faces, color, opts)
-end
-
 -- Groups faces by colour and draws one mesh per colour; returns one handle covering every facet.
 local function paintedMesh(
 	b,
@@ -285,19 +245,6 @@ local function cast(handle, origin: Vector3, direction: Vector3): (Vector3?, Vec
 	return point, normal
 end
 
--- Point on a shape seen from `origin` looking along `direction`, moved `lift` along the facet normal
--- (negative = sunk into the shape). When the ray misses the facets it aims at the shape's centre instead.
-local function onShape(handle, origin: Vector3, direction: Vector3, lift: number): Vector3
-	local point, normal = cast(handle, origin, direction.Unit)
-	if not point then
-		point, normal = cast(handle, origin, (handle.Center - origin).Unit)
-	end
-	if point and normal then
-		return point + normal * lift
-	end
-	return handle.Center
-end
-
 -- Point on the front of a shape at the design height y (x = offset from its centre), lifted outwards.
 local function onFront(b, shape, x: number, y: number, lift: number): Vector3
 	return (b:OnSurface(shape, x, y - shape.Center.Y) * CFrame.new(0, 0, -lift)).Position
@@ -326,32 +273,6 @@ end
 local function prong(b, name: string, base: Vector3, tip: Vector3, width: number, depth: number, down: Vector3, color: any, opts: any?)
 	local left, right = prongPoints(base, tip, width, depth, down)
 	return b:Mesh(name, { base, left, right, tip }, { { 1, 2, 4 }, { 1, 3, 4 }, { 2, 3, 4 } }, color, opts or THIN)
-end
-
---[[
-	Slim leg from `top` to `bottom`: a spindle with one straight edge (the axis) and its bulk towards
-	`back`, widest at ringAt. Its two flat sides are right-angled triangles: 8 parts (a Limb costs 12).
-]]
-local function strut(
-	b,
-	name: string,
-	top: Vector3,
-	bottom: Vector3,
-	width: number,
-	depth: number,
-	back: Vector3,
-	color: any,
-	ringAt: number?
-)
-	local axis = bottom - top
-	local d = axis.Unit
-	local dn = (back - d * back:Dot(d)).Unit
-	local across = d:Cross(dn) * (width / 2)
-	local ring = top + axis * (ringAt or 0.4)
-	local low = ring + dn * depth
-	local vertices = { top, low + across, low - across, bottom, ring }
-	local faces = { { 5, 2, 1 }, { 5, 3, 1 }, { 2, 3, 1 }, { 5, 2, 4 }, { 5, 3, 4 }, { 2, 3, 4 } }
-	return b:Mesh(name, vertices, faces, color, THIN)
 end
 
 --[[
@@ -599,8 +520,8 @@ end
 
 --[[
 	Leg column: a twisted triangular tube through `points` (top first, buried in the body), one radius per point
-	and one colour per segment, standing on a triangular sole whose front corner is pushed out by `toe` (the paw).
-	6 facets per segment + the sole (~12 parts per segment).
+	and one colour per segment, the last ring on the ground with its front corner pushed out by `toe` (the paw).
+	The sole is left open (it lies on the ground). 6 facets per segment (~12 parts).
 ]]
 local function column(b, name: string, points: { Vector3 }, radii: { number }, colors: { any }, toe: number?, opts: any?)
 	local n = #points
@@ -621,9 +542,6 @@ local function column(b, name: string, points: { Vector3 }, radii: { number }, c
 			local k1 = k % 3 + 1
 			table.insert(faces, { k, k1, k + 3 })
 			table.insert(faces, { k + 3, k1, k1 + 3 })
-		end
-		if i == n - 1 then
-			table.insert(faces, { 4, 5, 6 })
 		end
 		b:Mesh(name .. i, { r1[1], r1[2], r1[3], r2[1], r2[2], r2[3] }, faces, colors[math.min(i, #colors)], opts)
 	end
@@ -929,7 +847,7 @@ Designs["Pebbit"] = function(b)
 	-- the elbow.
 	b:MirrorBone("Arm", V(1.0, 1.12, 0.0), { Phase = 0.5 }, function()
 		b:Limb("UpperArm", V(0.55, 1.06, 0.06), V(2.3, 1.22, -0.02), 0.74, "Body", { RingAt = 0.6, Sides = 4, Thickness = 0.07 })
-		b:Limb("Forearm", V(2.0, 0.98, 0.02), V(2.02, 2.36, -0.24), 0.76, "Body", { RingAt = 0.55, Thickness = 0.07 })
+		b:Limb("Forearm", V(2.04, 1.02, 0.02), V(2.02, 2.36, -0.24), 0.8, "Body", { RingAt = 0.45, Thickness = 0.07, Up = BACK })
 		-- Big lumpy rock fist.
 		sculpt(b, "Fist", V(1.0, 0.92, 0.94), V(2.02, 2.42, -0.28), V(0, 20, 0), "Body", {
 			Detail = 1,
@@ -983,7 +901,7 @@ Designs["Bouldron"] = function(b)
 	b:Bone("Head", V(0, 2.2, -0.8), nil, function()
 		local head = sculpt(b, "Head", V(1.62, 1.28, 1.5), V(0, 2.18, -1.28), nil, "Belly", { Detail = 1, Deform = domed(0.9, snout(0.14, 1.12, 0.02)) })
 		b:Eyes(head, 0.34, 0.1, V(0.3, 0.28, 0.2), GOLEM_EYE)
-		b:Mouth(head, -0.3, 0.62)
+		b:Mouth(head, -0.3, 0.74)
 		-- Heavy rock brow over the eyes.
 		for _, side in { -1, 1 } do
 			prong(b, "Brow" .. (if side < 0 then "L" else "R"), V(side * 0.78, 2.72, -1.4), V(side * 0.02, 2.56, -2.08), 0.38, 0.34, V(0, -0.4, 1), "Accent")
@@ -993,144 +911,96 @@ end
 
 -- Fox line ----------------------------------------------------------------------------------------
 
--- Pointed ear with a flat front face and a darker inner triangle on it. Give the right side.
-local function foxEar(b, base: Vector3, tip: Vector3, width: number, depth: number, color: any, inner: any)
-	prong(b, "Ear", base, tip, width, depth, FRONT, color)
-	-- The front face of the prong is (left, right, tip): lay the inner ear on it.
-	local left, right = prongPoints(base, tip, width, depth, FRONT)
-	local centre = (left + right + tip) / 3
-	local normal = (right - left):Cross(tip - left).Unit
-	if normal:Dot(centre - base) < 0 then
-		normal = -normal
-	end
-	local lift = normal * 0.035
-	b:Tri(
-		"EarInner",
-		left:Lerp(centre, 0.35) + lift,
-		right:Lerp(centre, 0.35) + lift,
-		tip:Lerp(centre, 0.25) + lift,
-		inner,
-		{ Thickness = 0.04 }
-	)
-end
-
--- Four slim legs (struts with the calf at the back), paws in `pawColor`; diagonal pairs trot together.
-local function foxLegs(b, frontZ: number, backZ: number, spacing: number, hipY: number, width: number, pawColor: any?)
-	for index, z in { frontZ, backZ } do
-		b:MirrorBone(
-			if index == 1 then "LegFront" else "LegBack",
-			V(spacing, hipY, z),
-			{ Phase = if index == 1 then 0 else 0.5 },
-			function()
-				-- Bulk towards the back and the outside, so the leg shows some width from the front too.
-				strut(b, "Leg", V(spacing - 0.02, hipY + 0.2, z), V(spacing + 0.02, 0.1, z - 0.04), width, width * 0.85, V(0.55, 0, 0.85), "Body", 0.3)
-				if pawColor then
-					prong(b, "Paw", V(spacing + 0.04, 0.03, z + 0.12), V(spacing + 0.04, 0.03, z - 0.26), width * 0.9, 0.24, UP, pawColor)
-				end
-			end
-		)
-	end
-end
-
 -- Fox cub: big head with huge dark-lined ears and an orange curly forelock, small body with a cream underside,
--- short legs, and six tails fanning up behind it, each curling forwards at its light orange tip.
+-- short legs, and six big tails fanning up behind it, each curling forwards at its light orange tip.
 Designs["Emberfox"] = function(b)
 	local body = lathe(
 		b,
 		"Body",
-		CFrame.new(0, 0.92, 0.38) * SIDEWAYS,
-		{ { -0.45, 0.5, 0.44 }, { 0.32, 0.52, 0.48, 0.04 } },
+		CFrame.new(0, 0.74, 0.32) * SIDEWAYS,
+		{ { -0.05, 0.52, 0.5, 0.02 } },
 		4,
-		V(0, -0.82, 0.06),
-		V(0, 0.75, 0.2),
+		V(0, -0.8, 0.1),
+		V(0, 0.72, 0.16),
 		function(c: Vector3): any
-			return if c.Y < 0.78 then "Belly" else "Body"
+			return if c.Y < 0.62 then "Belly" else "Body"
 		end,
 		THIN,
 		0.5
 	)
 	b:SetCore(body)
-	for index, z in { -0.02, 0.8 } do
-		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(0.27, 0.78, z), { Phase = if index == 1 then 0 else 0.5 }, function()
-			column(b, "Leg", { V(0.27, 0.85, z), V(0.3, 0, z - 0.06) }, { 0.2, 0.12 }, { "Body" }, 1.7, THIN)
+	for index, z in { 0, 0.72 } do
+		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(0.26, 0.58, z), { Phase = if index == 1 then 0 else 0.5 }, function()
+			column(b, "Leg", { V(0.25, 0.7, z), V(0.29, 0, z - 0.06) }, { 0.22, 0.14 }, { "Body" }, 1.6, THIN)
 		end)
 	end
 
 	-- Six fluffy tails rising behind in a fan (each its own bone so they sway one after the other), their
 	-- light tips curling forwards and outwards.
-	for index, spec in { { -62, 28 }, { -36, 50 }, { -12, 66 }, { 12, 66 }, { 36, 50 }, { 62, 28 } } do
+	for index, spec in { { -54, 36 }, { -32, 57 }, { -10, 75 }, { 10, 75 }, { 32, 57 }, { 54, 36 } } do
 		local az, el = math.rad(spec[1]), math.rad(spec[2])
 		local dir = V(math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el))
-		local root = V(math.sin(az) * 0.1, 1.02, 1.0)
-		local ring = root + dir * 0.78
-		local tip = ring + (dir * 0.3 + V(math.sin(az) * 0.35, 0.25, -0.9)).Unit * 0.72
+		local root = V(math.sin(az) * 0.1, 0.84, 0.86)
+		local ring = root + dir * 1.12
+		local tip = ring + (dir * 0.2 + V(math.sin(az) * 0.45, 0.35, -0.8)).Unit * 0.86
 		b:Bone("Tail" .. index, root, { Phase = index / 6, Amp = 0.55 }, function()
-			plume(b, "Tail", root, ring, tip, 0.27, "Body", "Accent", dir:Cross(UP) + V(0, 0.01, 0))
+			plume(b, "Tail", root, ring, tip, 0.34, "Body", "Accent", dir:Cross(UP) + V(0, 0.01, 0))
 		end)
 	end
 
-	b:Bone("Head", V(0, 1.35, -0.3), nil, function()
-		local head = sculpt(b, "Head", V(1.7, 1.48, 1.5), V(0, 1.88, -0.5), nil, "Body", { Deform = domed(0.92, snout(0.24, 0.8, 0.03)) })
+	b:Bone("Head", V(0, 1.1, -0.24), nil, function()
+		local head = sculpt(b, "Head", V(1.7, 1.48, 1.5), V(0, 1.62, -0.42), nil, "Body", { Deform = domed(0.92, snout(0.24, 0.8, 0.03)) })
 		b:Eyes(head, 0.4, 0.02, V(0.42, 0.5, 0.28), FOX_EYE)
 		faceTri(b, "Nose", head, 0, -0.24, 0.16, 0.1, "Black")
 		b:Mouth(head, -0.4, 0.24)
-		-- Curly forelock: a big lock curling forwards over the forehead and a smaller one on each side.
-		prong(b, "Curl", V(0, 2.5, -0.5), V(0, 2.82, -0.95), 0.5, 0.34, BACK + DOWN, "Accent")
-		prong(b, "CurlTip", V(0, 2.8, -0.9), V(0, 2.5, -1.22), 0.4, 0.28, BACK, "Accent")
-		for _, side in { -1, 1 } do
-			prong(b, "CurlSide" .. (if side < 0 then "L" else "R"), V(side * 0.28, 2.48, -0.45), V(side * 0.56, 2.66, -1.02), 0.38, 0.26, BACK + DOWN, "Accent")
-		end
-		b:MirrorBone("Ear", V(0.45, 2.38, -0.48), nil, function()
-			local base, tip = V(0.42, 2.3, -0.48), V(1.08, 3.42, -0.36)
+		-- Curly forelock: a big lock rising from the crown and curling forwards over the forehead.
+		plume(b, "Curl", V(0, 2.16, -0.22), V(0, 2.58, -0.64), V(0, 2.24, -1.06), 0.26, "Accent", "Accent", SIDE)
+		b:MirrorBone("Ear", V(0.45, 2.12, -0.4), nil, function()
+			local base, tip = V(0.42, 2.04, -0.4), V(1.08, 3.16, -0.28)
 			b:Spike("Ear", base, tip, 0.84, 0.34, "Body", THIN, BACK)
 			innerFace(b, "EarInner", base, tip, 0.84, 0.34, BACK, 0.62, "Extra")
 		end)
 	end)
 end
 
--- Elegant golden fox standing tall: fluffy ruff on the chest, slender muzzle with red eyes, a crest swept back
+-- Elegant golden fox standing tall: fluffy ruff around the neck, slender muzzle with red eyes, a lock swept back
 -- from the forehead, slender legs, and nine long flowing tails fanning up behind it with orange tips.
 Designs["Novafox"] = function(b)
-	-- Body: a five-sided bipyramid lying along Z (mostly hidden between the ruff and the tails).
-	local body = sculpt(b, "Body", V(1.3, 2.3, 1.22), V(0, 1.72, 0.35), V(90, 0, 0), "Body", { Ring = 5, Twist = 0.5 })
+	-- Body and neck in one faceted solid: its front point rises into the head.
+	local body = lathe(b, "Body", CFrame.new(0, 1.52, 0.4) * SIDEWAYS, { { -0.05, 0.56, 0.56, 0.03 } }, 4, V(0, -1.0, 0.12), V(0, 1.08, 1.32), "Body", THIN, 0.5)
 	b:SetCore(body)
-	-- Fluffy ruff on the chest, hanging down to a point.
-	sculpt(b, "Ruff", V(1.36, 1.45, 1.1), V(0, 2.18, -0.6), nil, "Body", {
-		Detail = 0,
-		Deform = function(v: Vector3): Vector3
-			return if v.Y < -0.9 then V(0, -1.45, -0.42) elseif v.Z < -0.9 then V(0, 0.05, -1.2) else v
-		end,
-	})
-	-- Slender legs standing on their toes (calves at the back and the outside).
-	for index, z in { -0.32, 1.0 } do
-		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(0.38, 1.55, z), { Phase = if index == 1 then 0 else 0.5 }, function()
-			strut(b, "Leg", V(0.36, 1.85, z), V(0.4, 0.0, z - 0.08), 0.4, 0.36, V(0.5, 0, 0.85), "Body", 0.32)
+	for index, z in { -0.1, 0.95 } do
+		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(0.27, 1.3, z), { Phase = if index == 1 then 0 else 0.5 }, function()
+			column(b, "Leg", { V(0.26, 1.48, z), V(0.29, 0, z - 0.08) }, { 0.2, 0.11 }, { "Body" }, 1.6, THIN)
 		end)
 	end
+	-- Fluffy ruff around the neck, longest on the chest.
+	ruff(b, "Ruff", V(0, 2.5, -0.5), V(0, 2.02, -0.42), 0.38, 4, Vector2.new(0.66, 0.4), Vector2.new(0.72, 0.3), "Body", 0.5)
 
 	-- Nine long tails fanning up behind it (azimuth from straight back, elevation), tips curling outwards.
-	local tails = { { -66, 22 }, { -46, 44 }, { -22, 62 }, { 0, 74 }, { 22, 62 }, { 46, 44 }, { 66, 22 }, { -30, 18 }, { 30, 18 } }
+	local tails = { { -68, 24 }, { -48, 44 }, { -24, 62 }, { 0, 74 }, { 24, 62 }, { 48, 44 }, { 68, 24 }, { -32, 22 }, { 32, 22 } }
 	for index, spec in tails do
 		local az, el = math.rad(spec[1]), math.rad(spec[2])
 		local dir = V(math.sin(az) * math.cos(el), math.sin(el), math.cos(az) * math.cos(el))
-		local root = V(math.sin(az) * 0.12, 1.98, 1.3)
-		local ring = root + dir * 1.2
-		local tip = ring + (dir + V(math.sin(az) * 0.5, 0.45, 0)).Unit * 1.0
+		local root = V(math.sin(az) * 0.12, 1.66, 1.2)
+		local low = V(dir.X, dir.Y * 0.6, dir.Z).Unit
+		local ring = root + low * 1.3
+		local tip = ring + (dir * 0.7 + V(math.sin(az) * 0.45, 0.55, 0)).Unit * 1.15
 		b:Bone("Tail" .. index, root, { Phase = index / 9, Amp = 0.45 }, function()
-			plume(b, "Tail", root, ring, tip, 0.3, "Body", "Accent", dir:Cross(UP) + V(0, 0.01, 0))
+			spindle(b, "Tail", root, ring, tip, 0.52, 0.42, (BACK - dir * dir.Z).Unit + V(0, -0.2, 0), "Body", "Accent")
 		end)
 	end
 
-	b:Bone("Head", V(0, 2.62, -0.78), nil, function()
-		local head = sculpt(b, "Head", V(1.26, 1.12, 1.36), V(0, 3.12, -0.95), nil, "Body", { Deform = domed(0.9, snout(0.42, 0.68, 0.06)) })
-		b:Eyes(head, 0.3, 0.12, V(0.28, 0.32, 0.22), NINE_EYE)
-		-- Small black nose at the tip of the muzzle.
-		local nose = onFront(b, head, 0, 2.86, 0.03)
-		b:Tri("Nose", nose + V(-0.08, 0.04, 0), nose + V(0.08, 0.04, 0), nose + V(0, -0.06, -0.02), "Black", THIN)
-		-- Crest swept back from the forehead.
-		prong(b, "Crest", V(0, 3.5, -1.08), V(0, 4.18, -0.38), 0.5, 0.34, BACK + DOWN, "Body")
-		b:MirrorBone("Ear", V(0.36, 3.42, -0.88), nil, function()
-			foxEar(b, V(0.32, 3.36, -0.88), V(0.76, 4.26, -0.72), 0.52, 0.26, "Body", "Accent")
+	b:Bone("Head", V(0, 2.4, -0.55), nil, function()
+		local head = sculpt(b, "Head", V(1.46, 1.3, 1.5), V(0, 2.98, -0.74), nil, "Body", { Deform = domed(0.9, snout(0.44, 0.66, 0.06)) })
+		b:Eyes(head, 0.33, 0.14, V(0.32, 0.36, 0.24), NINE_EYE)
+		faceTri(b, "Nose", head, 0, -0.26, 0.16, 0.1, "Black")
+		-- Lock of fur swept back from the forehead.
+		prong(b, "Crest", V(0, 3.34, -1.04), V(0, 3.78, 0.04), 0.46, 0.34, DOWN, "Body")
+		b:MirrorBone("Ear", V(0.4, 3.34, -0.68), nil, function()
+			local base, tip = V(0.38, 3.26, -0.68), V(0.92, 4.34, -0.5)
+			b:Spike("Ear", base, tip, 0.64, 0.3, "Body", THIN, BACK)
+			innerFace(b, "EarInner", base, tip, 0.64, 0.3, BACK, 0.6, "Accent")
 		end)
 	end)
 end
@@ -1139,22 +1009,20 @@ end
 
 -- Gentle sea creature: long neck with a cream front, curled horn, grey studded shell, four paddle flippers.
 Designs["Lagoonie"] = function(b)
-	local body = sculpt(b, "Body", V(2.6, 1.45, 2.9), V(0, 0.78, 0.35), nil, "Body", {
-		Detail = 1,
-		Paint = function(normal: Vector3): any
-			return if normal.Y < -0.4 or normal.Z < -0.7 then "Belly" else nil
-		end,
-	})
+	local body = sculpt(b, "Body", V(2.6, 1.45, 2.9), V(0, 0.78, 0.35), nil, "Body", { Detail = 1 })
 	b:SetCore(body)
-	local shell = sculpt(b, "Shell", V(2.8, 1.75, 2.75), V(0, 1.32, 0.7), nil, "Accent", {
+	-- Wide low shell dome covering the back.
+	local shell = sculpt(b, "Shell", V(3.0, 1.55, 3.0), V(0, 1.16, 0.68), nil, "Accent", {
 		Deform = function(v: Vector3): Vector3
 			return if v.Y < 0 then V(v.X, v.Y * 0.45, v.Z) elseif v.Y > 0.99 then V(0, 1.12, 0.05) else v
 		end,
 	})
 	-- Blunt knobs on the shell.
-	for index, spot in { V(0.55, 0, 0.3), V(-0.55, 0, 0.3), V(0.62, 0, 1.15), V(-0.62, 0, 1.15), V(0, 0, 1.6) } do
-		local at = onShape(shell, spot + V(0, 4, 0), DOWN, -0.12)
-		b:Spike("Knob" .. index, at, at + V(spot.X * 0.15, 0.42, 0.05), 0.46, 0.42, "Extra", THIN, BACK)
+	for index, spot in { V(0.62, 0, 0.18), V(-0.62, 0, 0.18), V(0.78, 0, 1.05), V(-0.78, 0, 1.05), V(0, 0, 1.62) } do
+		local point, normal = cast(shell, spot + V(0, 4, 0), DOWN)
+		if point and normal then
+			b:Spike("Knob" .. index, point - normal * 0.12, point + (normal + UP).Unit * 0.3, 0.62, 0.56, "Extra", THIN, BACK)
+		end
 	end
 
 	-- Paddle flippers (they row while it walks).
@@ -1169,12 +1037,12 @@ Designs["Lagoonie"] = function(b)
 	end
 
 	b:Bone("Neck", V(0, 1.1, -0.75), { Role = "Tail", Amp = 0.25 }, function()
-		local neck = serpentRings({ V(0, 0.9, -0.6), V(0, 2.0, -1.05), V(0, 2.95, -1.12) }, { 0.6, 0.48, 0.42 }, 5, FRONT)
+		local neck = serpentRings({ V(0, 0.9, -0.55), V(0, 2.02, -0.88), V(0, 2.92, -1.26) }, { 0.58, 0.46, 0.4 }, 5, FRONT)
 		serpentPart(b, "Neck", neck, 1, 3, bellyFacing(V(0, -0.1, -1), 0.5))
 		b:Bone("Head", V(0, 2.9, -1.1), nil, function()
 			local head = sculpt(b, "Head", V(1.55, 1.3, 1.65), V(0, 3.42, -1.3), nil, "Body", { Deform = snout(0.2, 0.95) })
 			b:Eyes(head, 0.38, 0.1, V(0.34, 0.42, 0.24), "Black")
-			b:Mouth(head, -0.38, 0.4)
+			b:Mouth(head, -0.36, 0.52)
 			-- Horn curling backwards.
 			prong(b, "Horn", V(0, 3.95, -1.5), V(0, 4.5, -1.42), 0.32, 0.26, BACK, "Body")
 			prong(b, "HornTip", V(0, 4.4, -1.42), V(0, 4.62, -1.05), 0.24, 0.2, DOWN, "Body")

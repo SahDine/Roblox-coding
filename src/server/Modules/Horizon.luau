@@ -126,7 +126,7 @@ function Horizon.FloatingIsland(
 	local rng = Decor.Rng(seed)
 	local model = newModel("FloatingIsland", parent)
 	local s = scale
-	local n = 7
+	local n = 6
 	local step = math.pi * 2 / n
 	local radius = 14 * s
 	local twist = math.atan2(fallSide.Z, fallSide.X) -- a rim vertex faces the waterfall
