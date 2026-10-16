@@ -141,7 +141,7 @@ function Landmarks.Portal(parent: Instance, position: Vector3, halfOpening: numb
 		local highHeight = shaftTop - shaftSplit - JOINT / 2
 		block("Pillar", Vector3.new(ARCH_RING, highHeight, ARCH_DEPTH), u, shaftTop - highHeight / 2, 0, STONE_DARK)
 		block("Capital", Vector3.new(ARCH_RING + 0.8, CAPITAL_HEIGHT, ARCH_DEPTH + 0.8), u, shaftTop + CAPITAL_HEIGHT / 2, 0, KEYSTONE)
-		Decor.Torch(model, at(side * (outer + 1.7), 0, 3), 5)
+		Landmarks.Brazier(model, at(side * (outer + 1.7), 0, 3), 5, color)
 	end
 
 	-- Voussoirs: wedge-shaped stones between two radial planes, edge to edge around the opening.
@@ -323,6 +323,37 @@ local function prismSides(bottom: Vector3, top: Vector3, radius: number, topRadi
 		table.insert(triangles, { A = low[k1], B = high[k1], C = high[k], Inside = inside })
 	end
 	return triangles, high
+end
+
+-- Braziers ----------------------------------------------------------------------------------
+
+--[[
+	Fire brazier: a slim iron post carrying a faceted bowl (an upside-down pentagonal pyramid whose
+	tip rests on the post) with a fire and a warm light (~12 parts). Non-collidable.
+]]
+function Landmarks.Brazier(parent: Instance, base: Vector3, height: number, accent: Color3): Model
+	local model = newModel("Brazier", parent)
+	Decor.Part({
+		Name = "BrazierPost",
+		Size = Vector3.new(0.45, height, 0.45),
+		CFrame = CFrame.new(base + Vector3.new(0, height / 2, 0)) * CFrame.Angles(0, math.rad(45), 0),
+		Color = IRON,
+		Material = Enum.Material.Metal,
+		CanCollide = false,
+	}, model)
+	local rim = base + Vector3.new(0, height + 1, 0)
+	local bowl = facets("BrazierBowl", IRON:Lerp(accent, 0.25), Enum.Material.Metal)
+	local parts = LowPoly.DrawTriangles(LowPoly.ConeTriangles(rim, base + Vector3.new(0, height, 0), 1.1, 5, false), bowl, model, 0.1)
+	local fire = Instance.new("Fire")
+	fire.Size = 3
+	fire.Heat = 6
+	fire.Color = Color3.fromRGB(255, 140, 40)
+	fire.SecondaryColor = Color3.fromRGB(255, 220, 90)
+	fire.Parent = invisibleAnchor("BrazierFire", CFrame.new(rim + Vector3.new(0, 0.2, 0)), Vector3.new(1, 0.4, 1), model)
+	if parts[1] then
+		Decor.Light(parts[1], Color3.fromRGB(255, 170, 80), 16, 1.8)
+	end
+	return model
 end
 
 -- Spawn fountain ------------------------------------------------------------------------------

@@ -86,7 +86,7 @@ function Horizon.Mountain(parent: Instance, base: Vector3, radius: number, heigh
 	return model
 end
 
--- Puffy low-poly cloud: an icosahedron and two smaller puffs, shaded lavender underneath.
+-- Puffy low-poly cloud: an icosahedron and two smaller flat puffs, shaded lavender underneath (~72 parts).
 function Horizon.Cloud(parent: Instance, center: Vector3, scale: number, seed: number): Model
 	local rng = Decor.Rng(seed)
 	local model = newModel("Cloud", parent)
@@ -94,8 +94,8 @@ function Horizon.Cloud(parent: Instance, center: Vector3, scale: number, seed: n
 	local yaw = CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
 	local puffs = {
 		{ LowPoly.Icosahedron(), Vector3.zero, Vector3.new(16, 8, 12) },
-		{ LowPoly.Gyrobipyramid(), Vector3.new(9, -1.4, rng:NextNumber(-2, 2)), Vector3.new(10, 6, 8) },
-		{ LowPoly.Gyrobipyramid(), Vector3.new(-8.5, -1.8, rng:NextNumber(-2, 2)), Vector3.new(9, 5.2, 7.5) },
+		{ LowPoly.Octahedron(), Vector3.new(9.5, -1.6, rng:NextNumber(-2, 2)), Vector3.new(11, 5.4, 8.5) },
+		{ LowPoly.Octahedron(), Vector3.new(-9, -2, rng:NextNumber(-2, 2)), Vector3.new(10, 4.8, 8) },
 	}
 	for _, puff in puffs do
 		local frame = CFrame.new(center) * yaw * CFrame.new(puff[2] * s) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
@@ -111,7 +111,8 @@ end
 	Floating island centred on `center` (its grass top): a grass fan, an earth band and a long rock
 	spike underneath, with a tree and crystals on top and a waterfall pouring off the rim towards
 	`fallTo` (a world height; the water ends in a cloud of mist there).
-	fallSide: horizontal direction of the waterfall.
+	fallSide: horizontal direction of the waterfall. crystalColor (optional): adds a glowing crystal
+	cluster next to the tree.
 ]]
 function Horizon.FloatingIsland(
 	parent: Instance,
@@ -120,7 +121,7 @@ function Horizon.FloatingIsland(
 	seed: number,
 	fallSide: Vector3,
 	fallTo: number,
-	crystalColor: Color3
+	crystalColor: Color3?
 ): Model
 	local rng = Decor.Rng(seed)
 	local model = newModel("FloatingIsland", parent)
@@ -164,7 +165,9 @@ function Horizon.FloatingIsland(
 	else
 		Flora.RoundTree(model, ground - fallSide * 4 * s + side * 3 * s, 0.9 * s, seed + 1)
 	end
-	Flora.CrystalCluster(model, ground - side * 5 * s, 0.6 * s, seed + 2, crystalColor)
+	if crystalColor then
+		Flora.CrystalCluster(model, ground - side * 5 * s, 0.6 * s, seed + 2, crystalColor)
+	end
 
 	-- Waterfall: a stream over the grass, then a straight sheet of water down to `fallTo`.
 	local lip = rim[0] + fallSide * 0.3 * s

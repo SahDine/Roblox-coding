@@ -27,7 +27,25 @@ local UPGRADE = GameConfig.BaseUpgrade
 
 local DataService, CurrencyService, PlotService, UnitService
 
+local SAVE_DELAY = 4 -- seconds: upgrades bought in a row (one click per level) are saved together
+
 local lastRequest: { [Player]: number } = {}
+local saveScheduled: { [Player]: boolean } = {}
+
+-- Saves soon after an upgrade. A DataStore key takes about one write per 6 s: one save per click
+-- would pile up queued writes (and delay the final save when the player leaves).
+local function scheduleSave(player: Player)
+	if saveScheduled[player] then
+		return
+	end
+	saveScheduled[player] = true
+	task.delay(SAVE_DELAY, function()
+		if saveScheduled[player] then
+			saveScheduled[player] = nil
+			DataService.SaveAsync(player) -- no-op once the player left (their final save covers it)
+		end
+	end)
+end
 
 -- Current base level of a player (1 while the data is not loaded).
 function UpgradeService.GetLevel(player: Player): number
@@ -81,7 +99,7 @@ local function upgrade(player: Player, fromLevel: any): (boolean, string, number
 	data.BaseLevel = newLevel
 	applyLevel(player, newLevel)
 	PlotService.PlayUpgradeEffect(plot)
-	task.spawn(DataService.SaveAsync, player)
+	scheduleSave(player)
 
 	if newLevel >= UPGRADE.AnnounceFromLevel then
 		Notifier.All(`👑 {player.DisplayName}'s base reached level {newLevel}: {tier.Name}!`, "announce")
@@ -110,6 +128,7 @@ end
 
 function UpgradeService.OnPlayerRemoving(player: Player)
 	lastRequest[player] = nil
+	saveScheduled[player] = nil -- DataService.ReleaseAsync saves the level
 end
 
 function UpgradeService.Start()

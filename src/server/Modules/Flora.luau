@@ -123,7 +123,7 @@ function Flora.RoundTree(parent: Instance, base: Vector3, scale: number, seed: n
 	return model
 end
 
--- Pine with stacked cones, ~11 studs tall at scale 1 (~36-42 parts).
+-- Pine with stacked cones, ~11 studs tall at scale 1 (36 parts with 5 sides, 42 with 6).
 function Flora.Pine(parent: Instance, base: Vector3, scale: number, seed: number, needles: Color3?, sides: number?): Model
 	local rng = Decor.Rng(seed)
 	local s = scale
@@ -138,13 +138,36 @@ function Flora.Pine(parent: Instance, base: Vector3, scale: number, seed: number
 			base + Vector3.new(0, y, 0),
 			base + Vector3.new(0, y + height, 0),
 			radius,
-			sides or 6,
+			sides or 5,
 			false,
 			randomFlat(rng)
 		)
 		Decor.DrawShaded(triangles, Decor.Facets("Needles", color:Lerp(WHITE, tier * 0.04)), model, Decor.Thickness(radius * 0.4), rng, 0.06)
 		y += height * 0.55
 		radius *= 0.72
+	end
+	return model
+end
+
+--[[
+	Cheap pine silhouette for the hills behind the invisible walls, seen only from afar: two
+	five-sided tiers and no trunk (20 parts).
+]]
+function Flora.FarPine(parent: Instance, base: Vector3, scale: number, seed: number): Model
+	local rng = Decor.Rng(seed)
+	local s = scale
+	local model = newModel("FarPine", parent)
+	local color = pick(Flora.PineGreens, rng):Lerp(BLACK, 0.06)
+	local props = Decor.Facets("Needles", color)
+	props.CastShadow = false
+	local y, radius = 0.6 * s, rng:NextNumber(4.4, 5) * s
+	for tier = 1, 2 do
+		local height = (if tier == 1 then 7.4 else 5.8) * s
+		local triangles = LowPoly.ConeTriangles(base + Vector3.new(0, y, 0), base + Vector3.new(0, y + height, 0), radius, 5, false, randomFlat(rng))
+		props.Color = color:Lerp(WHITE, tier * 0.05)
+		Decor.DrawShaded(triangles, props, model, Decor.Thickness(radius * 0.4), rng, 0.05)
+		y += height * 0.5
+		radius *= 0.66
 	end
 	return model
 end
@@ -253,15 +276,25 @@ function Flora.Bush(parent: Instance, base: Vector3, scale: number, seed: number
 	return model
 end
 
+-- Irregular rock mesh: a gyrobipyramid (16 faces, cheaper than LowPoly.RockData's icosahedron)
+-- with every vertex pushed in or out.
+local function rockData(rng: Rng, roughness: number): LowPoly.MeshData
+	local data = LowPoly.Gyrobipyramid()
+	for index, vertex in data.Vertices do
+		data.Vertices[index] = vertex * (1 + rng:NextNumber(-roughness, roughness))
+	end
+	return data
+end
+
 --[[
-	Irregular boulder, a fifth of it buried (~30 parts). size = full extents. Boulders taller than
-	2.5 studs collide; mossy ones get green facets on top.
+	Irregular boulder, 40 % of it buried so its lower pyramid is never drawn (~24 parts).
+	size = full extents. Boulders taller than 2.5 studs collide; mossy ones get green facets on top.
 ]]
 function Flora.Boulder(parent: Instance, base: Vector3, size: Vector3, seed: number, color: Color3?, mossy: boolean?): Model
 	local rng = Decor.Rng(seed)
 	local model = newModel("Boulder", parent)
-	local center = base + Vector3.new(0, size.Y * 0.2, 0)
-	local triangles = Decor.AboveGround(meshTriangles(LowPoly.RockData(seed, 0.22), yawed(center, rng), size), base.Y)
+	local center = base + Vector3.new(0, size.Y * 0.1, 0)
+	local triangles = Decor.AboveGround(meshTriangles(rockData(rng, 0.2), yawed(center, rng), size), base.Y)
 	local props = Decor.Facets("Boulder", color or ROCK, Enum.Material.SmoothPlastic, size.Y > 2.5)
 	local tint = if mossy
 		then function(normal: Vector3): Color3?
@@ -310,14 +343,14 @@ function Flora.CrystalCluster(parent: Instance, base: Vector3, scale: number, se
 end
 
 --[[
-	Giant glowing mushroom (~55 parts): faceted stem, two-ring cap with a few pale spot facets and a
+	Giant glowing mushroom (~50 parts): faceted stem, two-ring cap with a few pale spot facets and a
 	glowing underside.
 ]]
 function Flora.Mushroom(parent: Instance, base: Vector3, scale: number, seed: number, capColor: Color3): Model
 	local rng = Decor.Rng(seed)
 	local s = scale
 	local model = newModel("Mushroom", parent)
-	local sides = 6
+	local sides = 5
 	local stemTop = 6.2 * s
 	local lean = randomFlat(rng) * rng:NextNumber(0.2, 0.9) * s
 	local capBase = base + Vector3.new(0, stemTop, 0) + lean
@@ -341,7 +374,7 @@ function Flora.Mushroom(parent: Instance, base: Vector3, scale: number, seed: nu
 		table.insert(cap, { A = rim[k1], B = upper[k1], C = upper[k], Inside = inside })
 		table.insert(cap, { A = upper[k], B = upper[k1], C = top, Inside = inside })
 	end
-	local spots = { [rng:NextInteger(1, 6)] = true, [rng:NextInteger(7, 12)] = true, [rng:NextInteger(13, 18)] = true }
+	local spots = { [rng:NextInteger(1, 5)] = true, [rng:NextInteger(6, 10)] = true, [rng:NextInteger(11, 15)] = true }
 	local index = 0
 	Decor.DrawShaded(cap, Decor.Facets("Cap", capColor), model, Decor.Thickness(rimRadius * 0.4), rng, 0.05, function(): Color3?
 		index += 1

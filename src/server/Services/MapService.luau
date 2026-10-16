@@ -239,9 +239,25 @@ local function groundHeight(x: number, z: number): number
 	return height
 end
 
+-- Pastel terrain palette matching the low-poly props (fresh meadow, lavender stone, warm dirt) and
+-- calm turquoise water with small waves.
+local function paintTerrain(terrain: Terrain)
+	terrain:SetMaterialColor(Enum.Material.Grass, Color3.fromRGB(114, 178, 86))
+	terrain:SetMaterialColor(Enum.Material.Cobblestone, Color3.fromRGB(170, 162, 182))
+	terrain:SetMaterialColor(Enum.Material.Ground, Color3.fromRGB(170, 128, 92))
+	terrain:SetMaterialColor(Enum.Material.Pavement, Color3.fromRGB(190, 180, 206))
+	terrain:SetMaterialColor(Enum.Material.Rock, Color3.fromRGB(140, 132, 158))
+	terrain.WaterColor = Color3.fromRGB(64, 176, 214)
+	terrain.WaterTransparency = 0.55
+	terrain.WaterReflectance = 0.5
+	terrain.WaterWaveSize = 0.08
+	terrain.WaterWaveSpeed = 6
+end
+
 local function buildTerrain()
 	local terrain = workspace.Terrain
 	local halfW, halfD = MapService.HalfWidth, MapService.HalfDepth
+	paintTerrain(terrain)
 
 	-- Meadow (top surface exactly at y = 0), wide enough to reach the mountains.
 	terrain:FillBlock(CFrame.new(0, -6, 0), Vector3.new(halfW * 2 + 380, 12, halfD * 2 + 380), Enum.Material.Grass)
@@ -342,7 +358,7 @@ local function buildConveyor(folder: Folder)
 	end
 
 	-- Crystal lamps at the edge of the plaza: a pair at the mouth of every dirt path with a pennant
-	-- garland between them, and a pair halfway between two paths and near both portals.
+	-- garland between them, a pair in the middle of the plaza and a pair near both portals.
 	local edge = PLAZA_HALF - 1.5
 	for _, center in baseCenters() do
 		local side = math.sign(center.Z)
@@ -351,15 +367,16 @@ local function buildConveyor(folder: Folder)
 		for _, dx in { -spread, spread } do
 			Landmarks.PlazaLamp(belt, Vector3.new(center.X + dx, 0, side * edge), lampColor, Vector3.new(0, 0, -side))
 		end
+		-- The rope is tied to the sides of the two lamp posts (0.4 thick).
 		Landmarks.Garland(
 			belt,
-			Vector3.new(center.X - spread, 7.4, side * edge),
-			Vector3.new(center.X + spread, 7.4, side * edge),
+			Vector3.new(center.X - spread + 0.25, 7.4, side * edge),
+			Vector3.new(center.X + spread - 0.25, 7.4, side * edge),
 			1.6,
 			PENNANTS
 		)
 	end
-	for _, x in { -HALF_CONVEYOR + 12, -MAP.PlotSpacing, 0, MAP.PlotSpacing, HALF_CONVEYOR - 12 } do
+	for _, x in { -HALF_CONVEYOR + 12, 0, HALF_CONVEYOR - 12 } do
 		for _, side in { -1, 1 } do
 			Landmarks.PlazaLamp(belt, Vector3.new(x, 0, side * edge), if side > 0 then GOLD else MAGIC, Vector3.new(0, 0, -side))
 		end
@@ -389,6 +406,48 @@ local function buildSpawn(folder: Folder)
 	spawn.Neutral = true
 	spawn.Duration = 2
 	spawn.Parent = folder
+
+	-- Inlay on the pad: a pale stone diamond around a small glowing one (four right triangles each,
+	-- lying on the pad's top face, non-collidable so players stand on the pad itself).
+	local padTop = origin + Vector3.new(0, 1, 0)
+	for _, layer in
+		{
+			{ Radius = 6, Color = MAGIC:Lerp(Color3.new(1, 1, 1), 0.45), Material = Enum.Material.Slate, Lift = 0.03 },
+			{ Radius = 2.4, Color = GOLD, Material = Enum.Material.Neon, Lift = 0.09 },
+		}
+	do
+		local inlay = Decor.Facets("SpawnInlay", layer.Color, layer.Material)
+		inlay.CastShadow = false
+		inlay.Thickness = 0.06
+		local center = padTop + Vector3.new(0, layer.Lift, 0)
+		local radius = layer.Radius
+		for k = 0, 3 do
+			local a, b = k * math.pi / 2, (k + 1) * math.pi / 2
+			LowPoly.Triangle(
+				center,
+				center + Vector3.new(math.cos(a), 0, math.sin(a)) * radius,
+				center + Vector3.new(math.cos(b), 0, math.sin(b)) * radius,
+				inlay,
+				plaza
+			)
+		end
+	end
+
+	-- A compass star of flat gold and lavender triangles on the courtyard paving, starting at the
+	-- edges and corners of the 16 x 16 pad (the western ray stops short of the fountain basin).
+	for index = 0, 7 do
+		local angle = index * math.pi / 4
+		local outward = Vector3.new(math.cos(angle), 0, math.sin(angle))
+		local across = Vector3.new(-outward.Z, 0, outward.X)
+		local long = index % 2 == 0
+		local foot = origin + outward * (if long then 8.1 else 11.4) + Vector3.new(0, 0.06, 0)
+		local tip = origin + outward * (if long then 15 else 16.5) + Vector3.new(0, 0.06, 0)
+		local width = if long then 3.2 else 2
+		local ray = Decor.Facets("SpawnRay", if long then GOLD else MAGIC:Lerp(Color3.new(1, 1, 1), 0.35), Enum.Material.Slate)
+		ray.CastShadow = false
+		ray.Thickness = 0.12
+		LowPoly.Triangle(foot + across * width, foot - across * width, tip, ray, plaza)
+	end
 
 	-- A ring of glowing crystal shards around the spawn pad.
 	local shard = Decor.Facets("SpawnShard", MAGIC:Lerp(Color3.new(0, 0, 0), 0.2), Enum.Material.Neon)
@@ -468,23 +527,22 @@ local function buildGardens(decor: Folder)
 				end
 				for _, dx in { -1, 1 } do
 					Flora.FlowerPatch(gardens, Vector3.new(x + dx * 16, 0, side * 23.5), 3, 6, seed + dx)
-					Flora.Bush(gardens, Vector3.new(x + dx * 25, 0, side * 27), 1, seed + 3 + dx)
-					Flora.Grass(gardens, Vector3.new(x + dx * 8, 0, side * 21), 1.5, 4, seed + 5 + dx)
 				end
+				-- A bush on one side, a grass tuft on the other (alternating from one garden to the next).
+				local flip = if (column + (if side > 0 then 1 else 0)) % 2 == 0 then 1 else -1
+				Flora.Bush(gardens, Vector3.new(x + flip * 25, 0, side * 27), 1.1, seed + 3)
+				Flora.Grass(gardens, Vector3.new(x - flip * 24, 0, side * 22), 1.6, 5, seed + 5)
 			else
-				-- Outer gardens next to the portals: a fenced flower meadow and a cherry tree.
+				-- Outer gardens next to the portals: a fenced flower meadow and a cherry tree. On the
+				-- spawn side the fence stops before the rare-spawn board and the spawn courtyard.
 				local outward = math.sign(x)
 				local from = HALF_CONVEYOR - 38
-				local to = HALF_CONVEYOR + 18
-				if isFree(outward * (from + to) / 2, side * 26, 6) then
-					Landmarks.Fence(gardens, Vector3.new(outward * from, 0, side * 19.5), Vector3.new(outward * to, 0, side * 19.5), seed)
-					Flora.CherryTree(gardens, Vector3.new(outward * (from + 12), 0, side * 26.5), 0.9, seed + 1)
-					Flora.FlowerPatch(gardens, Vector3.new(outward * (from + 30), 0, side * 25), 4, 9, seed + 2)
+				local to = if outward > 0 then HALF_CONVEYOR + 18 else HALF_CONVEYOR - 8
+				Landmarks.Fence(gardens, Vector3.new(outward * from, 0, side * 19.5), Vector3.new(outward * to, 0, side * 19.5), seed)
+				Flora.CherryTree(gardens, Vector3.new(outward * (from + 12), 0, side * 26.5), 0.9, seed + 1)
+				Flora.FlowerPatch(gardens, Vector3.new(outward * (from + 26), 0, side * 25), 3.5, 8, seed + 2)
+				if outward > 0 then
 					Flora.Bush(gardens, Vector3.new(outward * (to - 6), 0, side * 27), 1.1, seed + 3)
-				else
-					-- West side, next to the spawn and the boards: only small things.
-					Flora.Bush(gardens, Vector3.new(outward * (HALF_CONVEYOR - 22), 0, side * 26), 1, seed + 3)
-					Flora.FlowerPatch(gardens, Vector3.new(outward * (HALF_CONVEYOR - 32), 0, side * 24), 3, 6, seed + 2)
 				end
 			end
 		end
@@ -494,67 +552,64 @@ local function buildGardens(decor: Folder)
 	for column = 1, perSide - 1 do
 		local x = (column - perSide / 2) * spacing
 		for _, side in { -1, 1 } do
-			for _, z in { 62, 102 } do
-				seed += 1
-				if isFree(x, side * z, 0.5) then
-					Flora.FlowerPatch(gardens, Vector3.new(x, 0, side * z), 1.6, 4, seed)
-					Flora.Grass(gardens, Vector3.new(x, 0, side * (z + 9)), 1.5, 3, seed + 50)
-				end
+			seed += 1
+			if isFree(x, side * 84, 0.5) then
+				Flora.FlowerPatch(gardens, Vector3.new(x, 0, side * 84), 1.6, 5, seed)
 			end
 		end
 	end
 end
 
--- Forest between the backs of the bases and the hills.
+-- Forest between the backs of the bases and the hills: a loose double row of big trees with
+-- undergrowth, then cheap pine silhouettes on the hills behind the invisible walls.
 local function buildForest(decor: Folder)
 	local forest = Instance.new("Folder")
 	forest.Name = "Forest"
 	forest.Parent = decor
 	local rng = Decor.Rng(21)
 	local index = 0
-	for x = -MapService.HalfWidth + 12, MapService.HalfWidth - 12, 23 do
+	for x = -MapService.HalfWidth + 16, MapService.HalfWidth - 16, 32 do
 		for _, side in { -1, 1 } do
 			index += 1
-			local px = x + rng:NextNumber(-5, 5)
+			local px = x + rng:NextNumber(-6, 6)
 			local front = index % 4 < 2
-			local pz = side * (if front then rng:NextNumber(142, 150) else rng:NextNumber(156, 165))
+			local pz = side * (if front then rng:NextNumber(143, 150) else rng:NextNumber(157, 165))
 			if isFree(px, pz, 6) then
 				local base = Vector3.new(px, groundHeight(px, pz), pz)
 				local pick = index % 7
 				if pick == 0 then
-					Flora.Mushroom(forest, base, rng:NextNumber(1.1, 1.5), index, CAP_COLORS[index % #CAP_COLORS + 1])
+					Flora.Mushroom(forest, base, rng:NextNumber(1.2, 1.6), index, CAP_COLORS[index % #CAP_COLORS + 1])
 				elseif pick == 3 then
-					Flora.RoundTree(forest, base, rng:NextNumber(1.3, 1.7), index)
+					Flora.RoundTree(forest, base, rng:NextNumber(1.4, 1.8), index)
 				elseif pick == 5 then
-					Flora.CrystalCluster(forest, base, rng:NextNumber(1, 1.3), index, CRYSTAL_COLORS[index % #CRYSTAL_COLORS + 1])
-					Flora.Bush(forest, base + Vector3.new(4, 0, -side * 3), 1.1, index + 1)
+					Flora.CrystalCluster(forest, base, rng:NextNumber(1.1, 1.4), index, CRYSTAL_COLORS[index % #CRYSTAL_COLORS + 1])
 				else
-					Flora.Pine(forest, base, rng:NextNumber(1.4, 2), index)
+					Flora.Pine(forest, base, rng:NextNumber(1.5, 2.2), index)
 				end
 			end
-			-- Undergrowth on the other row.
-			if index % 3 == 0 then
-				local bx = x + 11
-				local bz = side * (if front then rng:NextNumber(156, 165) else rng:NextNumber(140, 146))
+			-- Undergrowth between the trees, on the other row.
+			if index % 4 == 1 then
+				local bx = x + 14
+				local bz = side * (if front then rng:NextNumber(157, 164) else rng:NextNumber(141, 146))
 				if isFree(bx, bz, 3) then
 					local base = Vector3.new(bx, groundHeight(bx, bz), bz)
-					if index % 2 == 0 then
-						Flora.Boulder(forest, base, Vector3.new(4.5, 3.2, 4), index, nil, true)
+					if index % 8 == 1 then
+						Flora.Boulder(forest, base, Vector3.new(5.4, 4, 4.8), index, nil, true)
 					else
-						Flora.Bush(forest, base, 1.2, index)
+						Flora.Bush(forest, base, 1.3, index)
 					end
 				end
 			end
 		end
 	end
 
-	-- A second, cheaper row of pines on the hills behind the invisible walls.
-	for x = -MapService.HalfWidth + 20, MapService.HalfWidth - 20, 46 do
+	-- Pine silhouettes on the hills behind the invisible walls.
+	for x = -MapService.HalfWidth + 20, MapService.HalfWidth - 20, 56 do
 		for _, side in { -1, 1 } do
 			index += 1
-			local px = x + rng:NextNumber(-10, 10)
-			local pz = side * (MapService.HalfDepth + rng:NextNumber(10, 20))
-			Flora.Pine(forest, Vector3.new(px, groundHeight(px, pz) - 0.5, pz), rng:NextNumber(1.6, 2.2), index, nil, 5)
+			local px = x + rng:NextNumber(-12, 12)
+			local pz = side * (MapService.HalfDepth + rng:NextNumber(10, 22))
+			Flora.FarPine(forest, Vector3.new(px, groundHeight(px, pz) - 0.5, pz), rng:NextNumber(1.7, 2.3), index)
 		end
 	end
 end
@@ -570,13 +625,21 @@ local function buildEnds(decor: Folder)
 		local seed = 300 + index * 20
 		local east = pond.X > 0
 		local outward = math.sign(pond.Z)
-		Landmarks.LilyPads(ends, pond, POND_RADIUS - 5, 6, seed)
-		for k = 0, 2 do
-			local angle = seed + k * 2.1
-			local rim = pond + Vector3.new(math.cos(angle), 0, math.sin(angle)) * (POND_RADIUS + 0.5)
-			Flora.Reeds(ends, rim, 2.2, 5, seed + k)
-			local rock = pond + Vector3.new(math.cos(angle + 1), 0, math.sin(angle + 1)) * (POND_RADIUS + 1.5)
-			Flora.Boulder(ends, rock, Vector3.new(3.4, 2, 3), seed + k, nil, k == 1)
+		local away = if east then 1 else -1
+		Landmarks.LilyPads(ends, pond, POND_RADIUS - 5, 4, seed)
+		-- Reeds and rocks on the rim, away from the bridge / stepping stones that cross the east
+		-- ponds along X.
+		local function rimPoint(angle: number, radius: number): Vector3
+			local a = angle
+			if east and math.abs(math.sin(a)) < 0.45 then
+				a += if math.sin(a) >= 0 then 1 else -1
+			end
+			return pond + Vector3.new(math.cos(a), 0, math.sin(a)) * radius
+		end
+		for k = 0, 1 do
+			local angle = seed + k * 2.6
+			Flora.Reeds(ends, rimPoint(angle, POND_RADIUS + 0.5), 2.4, 6, seed + k)
+			Flora.Boulder(ends, rimPoint(angle + 1.1, POND_RADIUS + 1.5), Vector3.new(3.8, 2.4, 3.4), seed + k, nil, k == 0)
 		end
 		if east then
 			if outward > 0 then
@@ -590,16 +653,14 @@ local function buildEnds(decor: Folder)
 				Landmarks.SteppingStones(ends, stones, seed)
 			end
 		end
-		-- Trees on the outer side of the pond.
-		for k, offset in { Vector3.new(-14, 0, 30), Vector3.new(15, 0, 29), Vector3.new(30, 0, 8) } do
-			local position = pond + Vector3.new(offset.X * (if east then 1 else -1), 0, offset.Z * outward)
-			if isFree(position.X, position.Z, 5) then
-				if k == 2 then
-					Flora.Pine(ends, position, 1.5, seed + 10 + k)
-				else
-					Flora.CherryTree(ends, position, 1.15, seed + 10 + k)
-				end
-			end
+		-- A cherry tree and a pine on the outer side of the pond.
+		local cherry = pond + Vector3.new(-14 * away, 0, 30 * outward)
+		if isFree(cherry.X, cherry.Z, 5) then
+			Flora.CherryTree(ends, cherry, 1.2, seed + 10)
+		end
+		local pine = pond + Vector3.new(30 * away, 0, 10 * outward)
+		if isFree(pine.X, pine.Z, 5) then
+			Flora.Pine(ends, pine, 1.6, seed + 11)
 		end
 	end
 
@@ -607,24 +668,19 @@ local function buildEnds(decor: Folder)
 	local westX = -MapService.HalfWidth + 42
 	Landmarks.Ruins(ends, Vector3.new(westX, 0, 130), math.rad(12), 501)
 	Landmarks.BrokenArch(ends, Vector3.new(westX - 4, 0, -128), math.rad(-20), 502)
-	Flora.Boulder(ends, Vector3.new(westX + 16, 0, -134), Vector3.new(6, 4.5, 5), 503, nil, true)
-	Flora.Boulder(ends, Vector3.new(westX - 14, 0, 142), Vector3.new(5, 3.6, 5.5), 504, nil, true)
+	Flora.Boulder(ends, Vector3.new(westX + 16, 0, -134), Vector3.new(6.4, 5.2, 5.4), 503, nil, true)
+	Flora.Boulder(ends, Vector3.new(westX - 14, 0, 142), Vector3.new(5.4, 4.2, 5.8), 504, nil, true)
 	Flora.Pine(ends, Vector3.new(westX + 22, 0, 112), 1.7, 505)
-	Flora.Pine(ends, Vector3.new(westX + 20, 0, -112), 1.6, 506)
 	Flora.RoundTree(ends, Vector3.new(westX - 16, 0, -112), 1.4, 507)
-	Flora.Mushroom(ends, Vector3.new(westX - 12, 0, 112), 1.2, 508, CAP_COLORS[1])
 
 	local eastX = MapService.HalfWidth - 40
 	for _, side in { -1, 1 } do
 		local grove = Vector3.new(eastX, 0, side * 130)
 		Flora.CrystalTree(ends, grove, 1.4, 600 + side, CRYSTAL_COLORS[2])
 		Flora.CrystalCluster(ends, grove + Vector3.new(-12, 0, side * -6), 1.3, 610 + side, CRYSTAL_COLORS[1])
-		Flora.CrystalCluster(ends, grove + Vector3.new(10, 0, side * 8), 1.1, 620 + side, CRYSTAL_COLORS[3])
 		Flora.Mushroom(ends, grove + Vector3.new(14, 0, side * -14), 1.3, 630 + side, CAP_COLORS[2])
-		Flora.Mushroom(ends, grove + Vector3.new(-6, 0, side * 16), 0.9, 640 + side, CAP_COLORS[4])
-		Flora.Boulder(ends, grove + Vector3.new(-18, 0, side * 14), Vector3.new(5, 3.5, 4.5), 650 + side, nil, true)
-		Flora.Pine(ends, grove + Vector3.new(-30, 0, side * -16), 1.6, 660 + side)
-		Flora.FlowerPatch(ends, grove + Vector3.new(4, 0, side * -12), 3.5, 8, 670 + side)
+		Flora.Boulder(ends, grove + Vector3.new(-18, 0, side * 14), Vector3.new(5.4, 4, 4.8), 650 + side, nil, true)
+		Flora.FlowerPatch(ends, grove + Vector3.new(4, 0, side * -12), 3.5, 7, 670 + side)
 	end
 end
 
@@ -636,25 +692,38 @@ local function buildHorizon(decor: Folder)
 	sky.Parent = decor
 	local rng = Decor.Rng(77)
 
-	-- Mountain range on an ellipse around the map.
-	local count = 18
+	-- Mountain range on an ellipse around the map: wide five-sided peaks, the taller ones snowy.
+	-- Each peak is pushed outwards until its foot clears the playable area and the ring of hills
+	-- (the ellipse alone passes too close to the corners of the rectangular map).
+	local clearX, clearZ = MapService.HalfWidth + 60, MapService.HalfDepth + 60
+	local count = 13
 	for index = 0, count - 1 do
-		local angle = (index + rng:NextNumber(-0.2, 0.2)) * math.pi * 2 / count
-		local position = Vector3.new(math.cos(angle) * 450, 0, math.sin(angle) * 330)
-		local height = rng:NextNumber(90, 150)
-		Horizon.Mountain(sky, position, rng:NextNumber(85, 110), height, 900 + index, height > 110, if index % 2 == 0 then 6 else 5)
+		local angle = (index + rng:NextNumber(-0.15, 0.15)) * math.pi * 2 / count
+		local direction = Vector3.new(math.cos(angle) * 460, 0, math.sin(angle) * 340)
+		local radius = rng:NextNumber(105, 125)
+		local position = direction
+		for _ = 1, 8 do
+			local dx = math.max(math.abs(position.X) - clearX, 0)
+			local dz = math.max(math.abs(position.Z) - clearZ, 0)
+			local gap = math.sqrt(dx * dx + dz * dz) - radius * 1.12
+			if gap >= 0 then
+				break
+			end
+			position += direction.Unit * (-gap + 1)
+		end
+		local height = rng:NextNumber(95, 160)
+		Horizon.Mountain(sky, position, radius, height, 900 + index, height > 115, 5)
 	end
 
 	for index, cloud in
 		{
 			Vector3.new(-150, 130, 120),
-			Vector3.new(110, 150, -70),
-			Vector3.new(260, 125, 150),
-			Vector3.new(-280, 140, -150),
-			Vector3.new(20, 165, 230),
+			Vector3.new(130, 150, -110),
+			Vector3.new(270, 125, 150),
+			Vector3.new(-290, 140, -160),
 		}
 	do
-		Horizon.Cloud(sky, cloud, rng:NextNumber(1.3, 1.9), 950 + index)
+		Horizon.Cloud(sky, cloud, rng:NextNumber(1.4, 1.9), 950 + index)
 	end
 
 	-- Floating islands: two pour their waterfalls into the east ponds, two float over the forest.
@@ -662,8 +731,8 @@ local function buildHorizon(decor: Folder)
 	Horizon.FloatingIsland(sky, northPond + Vector3.new(0, 62, 28), 0.9, 970, Vector3.new(0, 0, -1), 0, CRYSTAL_COLORS[1])
 	Horizon.FloatingIsland(sky, southPond + Vector3.new(0, 66, -28), 0.9, 971, Vector3.new(0, 0, 1), 0, CRYSTAL_COLORS[3])
 	local halfD = MapService.HalfDepth
-	Horizon.FloatingIsland(sky, Vector3.new(-120, 92, halfD + 40), 1.2, 972, Vector3.new(0.6, 0, -0.8).Unit, 30, CRYSTAL_COLORS[2])
-	Horizon.FloatingIsland(sky, Vector3.new(80, 100, -halfD - 45), 1.3, 973, Vector3.new(-0.5, 0, 0.85).Unit, 30, CRYSTAL_COLORS[1])
+	Horizon.FloatingIsland(sky, Vector3.new(-120, 92, halfD + 40), 1.2, 972, Vector3.new(0.6, 0, -0.8).Unit, 30)
+	Horizon.FloatingIsland(sky, Vector3.new(80, 100, -halfD - 45), 1.3, 973, Vector3.new(-0.5, 0, 0.85).Unit, 30)
 end
 
 local function buildDecor(folder: Folder)

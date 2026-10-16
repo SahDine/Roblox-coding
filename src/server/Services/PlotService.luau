@@ -530,13 +530,14 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 	}, CFrame.new(0, FLOOR_TOP / 2, rampZ))
 	ramp.CollisionGroup = "Default" -- critters walk up it too
 	for _, side in { -1, 1 } do
+		-- Overlaps the ramp by 0.1: its inner face must not lie in the gate pillar's face (z-fighting).
 		add({
 			ClassName = "WedgePart",
 			Name = "RampSide",
 			Size = Vector3.new(1.4, FLOOR_TOP + 0.6, RAMP_LENGTH),
 			Color = FOUNDATION,
 			Material = Enum.Material.Slate,
-		}, CFrame.new(side * (ENTRANCE_WIDTH / 2 + 0.7), (FLOOR_TOP + 0.6) / 2, rampZ))
+		}, CFrame.new(side * (ENTRANCE_WIDTH / 2 + 0.6), (FLOOR_TOP + 0.6) / 2, rampZ))
 		Decor.Torch(model, world(side * (ENTRANCE_WIDTH / 2 + 2.4), 0, -DEPTH / 2 - RAMP_LENGTH + 0.8), 5)
 	end
 
@@ -670,12 +671,14 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 			}, CFrame.new(side * (ENTRANCE_WIDTH / 2 + 1.75), height / 2, GATE_Z))
 		)
 	end
-	local beamY = FLOOR_TOP + WALL_HEIGHT + 3.9
+	-- The beam is a bit wider, deeper and taller than the pillars it rests on (bottom at the top of the
+	-- shield): no face of it lies in a pillar face, which would flicker (z-fighting).
+	local beamY = FLOOR_TOP + WALL_HEIGHT + 4
 	styled(
 		style.Trims,
 		add({
 			Name = "GateBeam",
-			Size = Vector3.new(ENTRANCE_WIDTH + 7, 2.2, 3.5),
+			Size = Vector3.new(ENTRANCE_WIDTH + 7.4, 2.4, 3.9),
 			Color = palette.Trim,
 			Material = palette.TrimMaterial,
 		}, CFrame.new(0, beamY, GATE_Z))
@@ -695,7 +698,7 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 				Material = Enum.Material.Slate,
 				CanCollide = false,
 				CastShadow = false,
-			}, CFrame.new(((maxLevel + 1) / 2 - gem) * gemSpacing, beamY, GATE_Z - 1.85) * CFrame.Angles(0, 0, math.rad(45)))
+			}, CFrame.new(((maxLevel + 1) / 2 - gem) * gemSpacing, beamY, GATE_Z - 2.05) * CFrame.Angles(0, 0, math.rad(45)))
 		)
 	end
 
