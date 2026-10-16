@@ -109,8 +109,8 @@ end
 
 --[[
 	Floating island centred on `center` (its grass top): a grass fan, an earth band and a long rock
-	spike underneath, with a tree and crystals on top and a waterfall pouring off the rim towards
-	`fallTo` (a world height; the water ends in a cloud of mist there).
+	spike underneath, with a tree and crystals on top and a waterfall pouring off the rim down to
+	`fallTo` (the world height of the water or ground below; the water lands in foam and mist there).
 	fallSide: horizontal direction of the waterfall. crystalColor (optional): adds a glowing crystal
 	cluster next to the tree.
 ]]
@@ -183,6 +183,26 @@ function Horizon.FloatingIsland(
 	local bottom = Vector3.new(lip.X, fallTo, lip.Z) + fallSide * 1.5 * s
 	LowPoly.Triangle(lip + across, lip - across, bottom + across * 1.4, water, model)
 	LowPoly.Triangle(lip - across, bottom - across * 1.4, bottom + across * 1.4, water, model)
+	-- A brighter streak running down the front of the sheet.
+	local streak = farProps("Waterfall", WATER:Lerp(WHITE, 0.55))
+	streak.Material = Enum.Material.Glass
+	streak.Transparency = 0.25
+	streak.Thickness = 0.2
+	local front = fallSide * 0.4
+	LowPoly.Triangle(lip + across * 0.45 + front, lip - across * 0.3 + front, bottom + across * 0.2 + front, streak, model)
+
+	-- Foam where the water lands: an eight-pointed star of flat right triangles (1 part each).
+	local foam = farProps("Foam", WHITE)
+	foam.Transparency = 0.2
+	foam.Thickness = 0.1
+	local splash = bottom + Vector3.new(0, 0.1, 0)
+	for k = 0, 7 do
+		local angle = k * math.pi / 4 + rng:NextNumber(-0.15, 0.15)
+		local reach = width * (if k % 2 == 0 then 1.5 else 0.95) * rng:NextNumber(0.85, 1.15)
+		local d1 = Vector3.new(math.cos(angle), 0, math.sin(angle))
+		local d2 = Vector3.new(-d1.Z, 0, d1.X)
+		LowPoly.Triangle(splash, splash + d1 * reach, splash + d2 * reach * 0.55, foam, model)
+	end
 
 	local mist = Decor.Part({
 		Name = "Mist",

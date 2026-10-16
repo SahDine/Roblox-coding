@@ -239,7 +239,8 @@ function HUDController.Start()
 	local function updateIncome()
 		incomeLabel.Text = "+" .. Format.Money(player:GetAttribute("Income") or 0) .. "/s"
 		local multiplier = player:GetAttribute("Multiplier") or 1
-		multiplierLabel.Text = "x" .. Format.Number(math.floor(multiplier * 100) / 100)
+		-- + 1e-6: products like 1.5 (rebirth) x 1.4 (base level) are 2.0999999999999996 in floating point.
+		multiplierLabel.Text = "x" .. Format.Number(math.floor(multiplier * 100 + 1e-6) / 100)
 	end
 
 	local function updateSlots()

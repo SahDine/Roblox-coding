@@ -936,53 +936,79 @@ function Landmarks.Bridge(parent: Instance, from: Vector3, to: Vector3, width: n
 	return model
 end
 
--- Flat-topped stones to hop across a pond (12 parts each, the underwater half is not drawn).
+--[[
+	Stones to hop across a pond (`points` on the water surface): an almost flat, walkable top (a very
+	shallow pyramid 0.35-0.55 above the water) on a steep skirt plunging into the water (2 triangles
+	per side, ~20-24 parts each). Collidable; a few top facets are mossy.
+]]
 function Landmarks.SteppingStones(parent: Instance, points: { Vector3 }, seed: number): Model
 	local rng = Decor.Rng(seed)
 	local model = newModel("SteppingStones", parent)
+	local props = facets("SteppingStone", STONE, Enum.Material.Slate, true)
 	for _, point in points do
-		local size = Vector3.new(rng:NextNumber(3.2, 3.8), 2.4, rng:NextNumber(3, 3.6))
-		local frame = CFrame.new(point + Vector3.new(0, -0.45, 0)) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0)
-		local triangles = Decor.AboveGround(meshTriangles(LowPoly.Bipyramid(6, 0), frame, size), point.Y - 0.4)
-		Decor.DrawShaded(triangles, facets("SteppingStone", STONE, Enum.Material.Slate, true), model, 0.2, rng, 0.06)
+		local sides = rng:NextInteger(5, 6)
+		local radius = rng:NextNumber(1.6, 1.9)
+		local twist = rng:NextNumber(0, math.pi * 2)
+		local rim = {}
+		for k = 0, sides - 1 do
+			local angle = twist + k * math.pi * 2 / sides
+			local r = radius * rng:NextNumber(0.9, 1.08)
+			rim[k] = point + Vector3.new(math.cos(angle) * r, rng:NextNumber(0.32, 0.4), math.sin(angle) * r)
+		end
+		local top = point + Vector3.new(rng:NextNumber(-0.2, 0.2), 0.55, rng:NextNumber(-0.2, 0.2))
+		local bottom = point - Vector3.new(0, 1.8, 0)
+		local inside = point - Vector3.new(0, 0.3, 0)
+		local triangles = {}
+		for k = 0, sides - 1 do
+			local k1 = (k + 1) % sides
+			table.insert(triangles, { A = rim[k], B = rim[k1], C = top, Inside = inside })
+			table.insert(triangles, { A = rim[k1], B = rim[k], C = bottom, Inside = inside })
+		end
+		Decor.DrawShaded(triangles, props, model, 0.2, rng, 0.07, function(normal: Vector3): Color3?
+			return if normal.Y > 0.9 and rng:NextNumber(0, 1) < 0.35 then Color3.fromRGB(120, 160, 104) else nil
+		end)
 	end
 	return model
 end
 
--- Lily pads (a hexagon with a notch) floating on a pond, some with a flower (~10-13 parts each).
+--[[
+	Lily pads floating on a pond: three right-angled quarter facets around the stem with the
+	classic notch in the fourth quarter (3 parts each); every other pad carries a water lily (four
+	pointed petals around a glowing heart, 9 parts).
+]]
 function Landmarks.LilyPads(parent: Instance, center: Vector3, radius: number, count: number, seed: number): Model
 	local rng = Decor.Rng(seed)
 	local model = newModel("LilyPads", parent)
-	local pad = facets("LilyPad", LILY)
-	pad.CastShadow = false
-	local petal = facets("Lily", Color3.fromRGB(255, 190, 220))
+	local petal = facets("Lily", Color3.fromRGB(255, 196, 224))
 	petal.CastShadow = false
 	petal.Thickness = 0.06
+	local heart = glowProps("LilyHeart", Color3.fromRGB(255, 226, 120))
+	heart.Thickness = 0.06
 	for index = 1, count do
 		local angle = rng:NextNumber(0, math.pi * 2)
 		local distance = math.sqrt(rng:NextNumber(0, 1)) * radius
 		local hub = center + Vector3.new(math.cos(angle) * distance, 0.08, math.sin(angle) * distance)
-		local size = rng:NextNumber(1.2, 1.9)
+		local size = rng:NextNumber(1.3, 2)
 		local turn = rng:NextNumber(0, math.pi * 2)
-		local triangles = {}
-		for k = 0, 4 do
-			local a0 = turn + k * math.pi / 3
-			local a1 = a0 + math.pi / 3
-			table.insert(triangles, {
-				A = hub,
-				B = hub + Vector3.new(math.cos(a0), 0, math.sin(a0)) * size,
-				C = hub + Vector3.new(math.cos(a1), 0, math.sin(a1)) * size,
-			})
+		local pad = facets("LilyPad", LILY:Lerp(WHITE, rng:NextNumber(0, 0.12)))
+		pad.CastShadow = false
+		pad.Thickness = 0.06
+		for k = 0, 2 do
+			local a = turn + k * math.pi / 2
+			local d1 = Vector3.new(math.cos(a), 0, math.sin(a))
+			local d2 = Vector3.new(-d1.Z, 0, d1.X)
+			LowPoly.Triangle(hub, hub + d1 * size, hub + d2 * size * rng:NextNumber(0.9, 1.05), pad, model)
 		end
-		LowPoly.DrawTriangles(triangles, pad, model, 0.06)
-		if index % 3 == 0 then
-			local head = hub + Vector3.new(0, 0.35, 0)
-			for k = 0, 2 do
-				local a = turn + k * math.pi * 2 / 3
-				local d1 = Vector3.new(math.cos(a), 0.35, math.sin(a))
-				local d2 = Vector3.new(math.cos(a + math.pi / 2), 0.35, math.sin(a + math.pi / 2))
-				LowPoly.Triangle(head, head + d1 * 0.6, head + d2 * 0.6, petal, model)
+		if index % 2 == 0 then
+			-- Petals rising around the heart, their tips leaning outwards.
+			local head = hub + Vector3.new(0, 0.06, 0)
+			for k = 0, 3 do
+				local a = turn + (k + 0.5) * math.pi / 2
+				local out = Vector3.new(math.cos(a), 0, math.sin(a))
+				local side = Vector3.new(-out.Z, 0, out.X)
+				LowPoly.Triangle(head + side * 0.3, head - side * 0.3, head + out * 0.75 + Vector3.new(0, 0.55, 0), petal, model)
 			end
+			LowPoly.Triangle(head, head + Vector3.new(0.25, 0, 0), head + Vector3.new(0, 0.3, 0.25), heart, model)
 		end
 	end
 	return model

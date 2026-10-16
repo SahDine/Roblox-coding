@@ -247,6 +247,7 @@ local function paintTerrain(terrain: Terrain)
 	terrain:SetMaterialColor(Enum.Material.Ground, Color3.fromRGB(170, 128, 92))
 	terrain:SetMaterialColor(Enum.Material.Pavement, Color3.fromRGB(190, 180, 206))
 	terrain:SetMaterialColor(Enum.Material.Rock, Color3.fromRGB(140, 132, 158))
+	terrain:SetMaterialColor(Enum.Material.Sand, Color3.fromRGB(228, 210, 168))
 	terrain.WaterColor = Color3.fromRGB(64, 176, 214)
 	terrain.WaterTransparency = 0.55
 	terrain.WaterReflectance = 0.5
@@ -279,8 +280,9 @@ local function buildTerrain()
 	-- Spawn courtyard.
 	terrain:FillCylinder(CFrame.new(MapService.SpawnPosition - Vector3.new(0, 2, 0)), 4, SPAWN_RADIUS, Enum.Material.Pavement)
 
-	-- Ponds at both ends of the plaza (surface at y = 0).
+	-- Ponds at both ends of the plaza (surface at y = 0) with a pale sandy shore.
 	for _, pond in PONDS do
+		terrain:FillCylinder(CFrame.new(pond - Vector3.new(0, 2, 0)), 4, POND_RADIUS + 3, Enum.Material.Sand)
 		terrain:FillCylinder(CFrame.new(pond - Vector3.new(0, 3, 0)), 6, POND_RADIUS, Enum.Material.Water)
 	end
 
@@ -730,9 +732,17 @@ local function buildHorizon(decor: Folder)
 	local northPond, southPond = PONDS[1], PONDS[2]
 	Horizon.FloatingIsland(sky, northPond + Vector3.new(0, 62, 28), 0.9, 970, Vector3.new(0, 0, -1), 0, CRYSTAL_COLORS[1])
 	Horizon.FloatingIsland(sky, southPond + Vector3.new(0, 66, -28), 0.9, 971, Vector3.new(0, 0, 1), 0, CRYSTAL_COLORS[3])
+	-- The waterfalls of the forest islands land on the hills (the foot is ~16 studs out per unit of scale).
 	local halfD = MapService.HalfDepth
-	Horizon.FloatingIsland(sky, Vector3.new(-120, 92, halfD + 40), 1.2, 972, Vector3.new(0.6, 0, -0.8).Unit, 30)
-	Horizon.FloatingIsland(sky, Vector3.new(80, 100, -halfD - 45), 1.3, 973, Vector3.new(-0.5, 0, 0.85).Unit, 30)
+	for index, island in
+		{
+			{ Center = Vector3.new(-120, 92, halfD + 40), Scale = 1.2, Fall = Vector3.new(0.6, 0, -0.8).Unit },
+			{ Center = Vector3.new(80, 100, -halfD - 45), Scale = 1.3, Fall = Vector3.new(-0.5, 0, 0.85).Unit },
+		}
+	do
+		local foot = island.Center + island.Fall * 16 * island.Scale
+		Horizon.FloatingIsland(sky, island.Center, island.Scale, 971 + index, island.Fall, groundHeight(foot.X, foot.Z))
+	end
 end
 
 local function buildDecor(folder: Folder)
@@ -745,10 +755,15 @@ local function buildDecor(folder: Folder)
 	buildEnds(decor)
 	buildHorizon(decor)
 
-	-- Fireflies over the gardens and the forest.
+	-- Fireflies over the gardens (between the dirt paths, clear of the rare-spawn board) and the forest.
+	for _, x in { -180, -96, 0, 96, 180 } do
+		for _, side in { -1, 1 } do
+			Decor.Fireflies(decor, Vector3.new(x, 5, side * 25), Vector3.new(if math.abs(x) > 150 then 30 else 48, 6, 10))
+		end
+	end
 	for x = -MapService.HalfWidth + 40, MapService.HalfWidth - 40, 80 do
-		for _, z in { -PLOT_FRONT + 22, PLOT_FRONT - 22, -PLOT_BACK - 26, PLOT_BACK + 26 } do
-			Decor.Fireflies(decor, Vector3.new(x, 6, z), Vector3.new(60, 8, 16))
+		for _, side in { -1, 1 } do
+			Decor.Fireflies(decor, Vector3.new(x, 6, side * (PLOT_BACK + 26)), Vector3.new(60, 8, 16))
 		end
 	end
 end

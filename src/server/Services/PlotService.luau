@@ -51,7 +51,7 @@ export type Slot = {
 	PadCap: BasePart, -- trim cap of the collect pedestal (under the button)
 	PadLabel: TextLabel,
 	StandPosition: Vector3, -- top of the critter pedestal
-	GroundPosition: Vector3, -- floor in front of the collect pedestal (end of the walk home)
+	GroundPosition: Vector3, -- floor beside the collect pedestal (end of the walk home, see GetSlotPath)
 	LastText: string?,
 }
 
@@ -113,6 +113,8 @@ local GATE_Z = -DEPTH / 2 + 0.75
 local PEDESTAL_TOP = FLOOR_TOP + 1.3
 local COLLECT_OFFSET = 5.7 -- distance from a critter pedestal to its collect pedestal (towards the gate)
 local COLLECT_HEIGHT = 1 -- height of the collect pedestal's column (cap and button on top)
+local ROW_AISLE = 3.2 -- walking critters follow the aisle this far in front of a row of collect pedestals
+local WALK_SIDE = 2.9 -- ...and end their walk beside their collect pedestal (on the central aisle's side)
 local RAMP_LENGTH = 7
 local TERRAIN_MARGIN = 4 -- bare ground around the base
 local STATION_Z = -DEPTH / 2 + 8 -- lock button and upgrade station, on each side of the gate plaza
@@ -986,7 +988,9 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 				PadCap = padCap,
 				PadLabel = padLabel,
 				StandPosition = world(x, PEDESTAL_TOP, z),
-				GroundPosition = world(x, FLOOR_TOP, collectZ - 3.2),
+				-- Between the collect pedestal's side and the front of the critter pedestal: the last
+				-- hop onto the pedestal (UnitService.placeModel) stays short.
+				GroundPosition = world(x - math.sign(x) * WALK_SIDE, FLOOR_TOP, z - 4.6),
 			}
 		end
 	end
@@ -1152,13 +1156,16 @@ function PlotService.GetEntrancePath(plot: Plot): { Vector3 }
 end
 
 -- Waypoints of a critter walking home: up the ramp, through the gate, along the central aisle, then
--- along its row to the spot in front of its collect pedestal (it never walks through other pedestals).
+-- along the aisle in front of its row and up beside its collect pedestal (it never walks through
+-- other pedestals).
 function PlotService.GetSlotPath(plot: Plot, slotIndex: number): { Vector3 }
 	local path = PlotService.GetEntrancePath(plot)
 	local slot = plot.Slots[slotIndex]
 	if slot then
 		local ground = plot.CFrame:PointToObjectSpace(slot.GroundPosition)
-		table.insert(path, (plot.CFrame * CFrame.new(0, FLOOR_TOP, ground.Z)).Position)
+		local aisleZ = plot.CFrame:PointToObjectSpace(slot.StandPosition).Z - COLLECT_OFFSET - ROW_AISLE
+		table.insert(path, (plot.CFrame * CFrame.new(0, FLOOR_TOP, aisleZ)).Position)
+		table.insert(path, (plot.CFrame * CFrame.new(ground.X, FLOOR_TOP, aisleZ)).Position)
 		table.insert(path, slot.GroundPosition)
 	end
 	return path

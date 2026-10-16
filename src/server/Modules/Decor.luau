@@ -92,13 +92,29 @@ function Decor.Fireflies(parent: Instance, position: Vector3, area: Vector3, col
 	emitter.Parent = emitterPart
 end
 
+-- Square sections turned by 45 degrees read as facets in the low-poly style (no round parts).
+local DIAMOND = CFrame.Angles(0, math.rad(45), 0)
+local GEM = CFrame.Angles(0, math.rad(45), 0) * CFrame.Angles(math.rad(35.26), 0, 0) * CFrame.Angles(0, 0, math.rad(45))
+
+-- Wooden torch with a faceted iron bowl, a fire and a warm light (2 parts). Non-collidable.
 function Decor.Torch(parent: Instance, base: Vector3, height: number?)
 	local h = height or 4
-	Decor.Column("TorchStick", h, 0.5, base, Color3.fromRGB(90, 60, 40), parent, { Material = Enum.Material.Wood, CanCollide = false })
-	local bowl = Decor.Column("TorchBowl", 0.6, 1.2, base + Vector3.new(0, h, 0), Color3.fromRGB(60, 60, 70), parent, {
+	Decor.Part({
+		Name = "TorchStick",
+		Size = Vector3.new(0.45, h, 0.45),
+		CFrame = CFrame.new(base + Vector3.new(0, h / 2, 0)) * DIAMOND,
+		Color = Color3.fromRGB(90, 60, 40),
+		Material = Enum.Material.Wood,
+		CanCollide = false,
+	}, parent)
+	local bowl = Decor.Part({
+		Name = "TorchBowl",
+		Size = Vector3.new(1.1, 0.6, 1.1),
+		CFrame = CFrame.new(base + Vector3.new(0, h + 0.3, 0)) * DIAMOND,
+		Color = Color3.fromRGB(60, 60, 70),
 		Material = Enum.Material.Metal,
 		CanCollide = false,
-	})
+	}, parent)
 	local fire = Instance.new("Fire")
 	fire.Size = 3
 	fire.Heat = 6
@@ -108,8 +124,15 @@ function Decor.Torch(parent: Instance, base: Vector3, height: number?)
 	Decor.Light(bowl, Color3.fromRGB(255, 170, 80), 16, 1.8)
 end
 
+-- Iron lantern post with a glowing gem (a cube standing on a corner) hanging from its arm (3 parts).
 function Decor.Lantern(parent: Instance, base: Vector3, color: Color3)
-	Decor.Column("LanternPost", 7, 0.5, base, Color3.fromRGB(45, 40, 55), parent, { Material = Enum.Material.Metal })
+	Decor.Part({
+		Name = "LanternPost",
+		Size = Vector3.new(0.45, 7, 0.45),
+		CFrame = CFrame.new(base + Vector3.new(0, 3.5, 0)) * DIAMOND,
+		Color = Color3.fromRGB(45, 40, 55),
+		Material = Enum.Material.Metal,
+	}, parent)
 	Decor.Part({
 		Name = "LanternArm",
 		Size = Vector3.new(0.3, 0.3, 1.6),
@@ -118,11 +141,15 @@ function Decor.Lantern(parent: Instance, base: Vector3, color: Color3)
 		Material = Enum.Material.Metal,
 		CanCollide = false,
 	}, parent)
-	local glow = Decor.Ellipsoid("LanternGlow", Vector3.new(1.2, 1.5, 1.2), CFrame.new(base + Vector3.new(0, 6.3, -1.2)), color, parent, {
+	local glow = Decor.Part({
+		Name = "LanternGlow",
+		Size = Vector3.new(0.9, 0.9, 0.9),
+		CFrame = CFrame.new(base + Vector3.new(0, 6.15, -1.2)) * GEM,
+		Color = color,
 		Material = Enum.Material.Neon,
 		CanCollide = false,
 		CastShadow = false,
-	})
+	}, parent)
 	Decor.Light(glow, color, 18, 1.4)
 end
 

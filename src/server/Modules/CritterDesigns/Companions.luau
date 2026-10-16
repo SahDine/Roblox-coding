@@ -21,8 +21,8 @@ local THIN = { Thickness = 0.06 }
 
 -- Geometry helpers --------------------------------------------------------------------------------
 
--- Ray / facet intersection (Möller-Trumbore) against a handle's triangles: point and outward normal.
-local function cast(handle, origin: Vector3, direction: Vector3): (Vector3?, Vector3?)
+-- Ray / facet intersection (Möller-Trumbore) against a handle's triangles: point, outward normal and the facet.
+local function cast(handle, origin: Vector3, direction: Vector3): (Vector3?, Vector3?, any)
 	local best, bestTriangle = math.huge, nil
 	for _, triangle in handle.Tris do
 		local e1, e2 = triangle.B - triangle.A, triangle.C - triangle.A
@@ -52,7 +52,7 @@ local function cast(handle, origin: Vector3, direction: Vector3): (Vector3?, Vec
 	if (point - (bestTriangle.Inside or handle.Center)):Dot(normal) < 0 then
 		normal = -normal
 	end
-	return point, normal
+	return point, normal, bestTriangle
 end
 
 -- Point on the surface of a shape hit by a ray from `origin` along `direction`, lifted `lift` outwards.
@@ -60,6 +60,27 @@ local function on(handle, origin: Vector3, direction: Vector3, lift: number?): V
 	local point, normal = cast(handle, origin, direction.Unit)
 	assert(point and normal, "surface ray missed the shape")
 	return point + normal * (lift or 0)
+end
+
+--[[
+	Stripe lying flat on one facet of a shape (back stripes, markings): the facet hit by a ray from `origin` along
+	`direction` is cut by two lines parallel to the edge opposite its vertex furthest along `apexDir`, at fractions
+	t0 .. t1 of the way from that edge to the vertex, and lifted off the facet. 2 flat triangles (~4 parts).
+]]
+local function facetBand(b, name: string, handle, origin: Vector3, direction: Vector3, apexDir: Vector3, t0: number, t1: number, color: any)
+	local _, normal, facet = cast(handle, origin, direction.Unit)
+	assert(normal and facet, "stripe ray missed the shape")
+	local corners = { facet.A, facet.B, facet.C }
+	table.sort(corners, function(p: Vector3, q: Vector3): boolean
+		return p:Dot(apexDir) > q:Dot(apexDir)
+	end)
+	local apex, e1, e2 = corners[1], corners[2], corners[3]
+	local lift = normal * 0.035
+	local function at(edge: Vector3, t: number): Vector3
+		return edge + (apex - edge) * t + lift
+	end
+	b:Tri(name .. "A", at(e1, t0), at(e2, t0), at(e2, t1), color, THIN)
+	b:Tri(name .. "B", at(e1, t0), at(e2, t1), at(e1, t1), color, THIN)
 end
 
 -- Same frame as CritterBuilder's Spike: +Y along the spike, Z towards the hint.
@@ -158,6 +179,51 @@ local function tetraFoot(b, name: string, center: Vector3, size: Vector3, color:
 		V(center.X + h.X, y, center.Z + h.Z * 0.6),
 		V(center.X - h.X, y, center.Z + h.Z * 0.6),
 		V(center.X, center.Y + h.Y, center.Z + h.Z * 0.3),
+	}
+	return b:Mesh(name, vertices, { { 1, 2, 4 }, { 2, 3, 4 }, { 3, 1, 4 } }, color, opts)
+end
+
+--[[
+	Light pyramid from `base` to `tip` whose bulk lies on the `down` side of the base-tip edge: its two side faces are
+	right-angled triangles (one part each), ~4 parts in all (crests, tufts, small tails). Sink the base.
+]]
+local function prong(b, name: string, base: Vector3, tip: Vector3, width: number, depth: number, down: Vector3, color: any, opts: any?)
+	local d = (tip - base).Unit
+	local dn = down - d * down:Dot(d)
+	if dn.Magnitude < 1e-3 then
+		dn = SIDE - d * d.X
+	end
+	dn = dn.Unit
+	local across = d:Cross(dn) * (width / 2)
+	local low = base + dn * depth
+	return b:Mesh(name, { base, low + across, low - across, tip }, { { 1, 2, 4 }, { 1, 3, 4 }, { 2, 3, 4 } }, color, opts or THIN)
+end
+
+--[[
+	Slim leg from `top` to `bottom`: a spindle whose front edge is straight (on the axis) and whose bulk lies towards
+	`back`, widest at `ringAt`. Four of its six faces are right-angled (one part each): ~8 parts (a Limb costs 12).
+]]
+local function strut(b, name: string, top: Vector3, bottom: Vector3, width: number, depth: number, back: Vector3, color: any, ringAt: number?)
+	local axis = bottom - top
+	local d = axis.Unit
+	local dn = (back - d * back:Dot(d)).Unit
+	local across = d:Cross(dn) * (width / 2)
+	local ring = top + axis * (ringAt or 0.4)
+	local low = ring + dn * depth
+	local faces = { { 5, 2, 1 }, { 5, 3, 1 }, { 2, 3, 1 }, { 5, 2, 4 }, { 5, 3, 4 }, { 2, 3, 4 } }
+	return b:Mesh(name, { top, low + across, low - across, bottom, ring }, faces, color, THIN)
+end
+
+-- Blunt paw: a wide front face (two toe corners on the ground and a knuckle point) over a heel. 3 visible facets
+-- (~6 parts), open underneath (it stands on the ground). Hide the leg's lower end in it.
+local function paw(b, name: string, center: Vector3, size: Vector3, color: any, opts: any?)
+	local h = size / 2
+	local y = center.Y - h.Y
+	local vertices = {
+		V(center.X - h.X, y, center.Z - h.Z),
+		V(center.X + h.X, y, center.Z - h.Z),
+		V(center.X, y, center.Z + h.Z),
+		V(center.X, center.Y + h.Y, center.Z - h.Z * 0.05),
 	}
 	return b:Mesh(name, vertices, { { 1, 2, 4 }, { 2, 3, 4 }, { 3, 1, 4 } }, color, opts)
 end
@@ -443,9 +509,9 @@ end
 	Leg column: a twisted triangular tube through `points` (top first, buried in the body), one radius per point
 	and one colour per segment (a colour or { colour, opts }), standing on a triangular sole whose front corner is
 	pushed out by `toe` (the paw), or ending in a point when the last radius is 0. 6 facets per segment + the sole
-	(~12 parts per segment).
+	(~12 parts per segment). `open` leaves the sole out (it lies on the ground, nobody sees it).
 ]]
-local function column(b, name: string, points: { Vector3 }, radii: { number }, colors: { any }, toe: number?, opts: any?)
+local function column(b, name: string, points: { Vector3 }, radii: { number }, colors: { any }, toe: number?, opts: any?, open: boolean?)
 	local n = #points
 	local rings = {}
 	for i = 1, n do
@@ -468,7 +534,7 @@ local function column(b, name: string, points: { Vector3 }, radii: { number }, c
 				table.insert(faces, { k + 3, k1, k1 + 3 })
 			end
 		end
-		if i == n - 1 and not pointed then
+		if i == n - 1 and not pointed and not open then
 			table.insert(faces, { 4, 5, 6 })
 		end
 		local paint = colors[math.min(i, #colors)]
@@ -545,20 +611,15 @@ end
 Designs["Zappip"] = function(b)
 	local body = b:Ball("Body", V(1.8, 1.7, 1.55), V(0, 1.02, 0.05), nil, "Body")
 	b:SetCore(body)
-	-- Two brown stripes lying on the back (corners cast onto the facets from behind).
-	for index, spec in { { 1.52, 0.36 }, { 1.12, 0.42 } } do
-		local y, w = spec[1], spec[2]
-		local left = on(body, V(-w, y, 4), FRONT, 0.04)
-		local right = on(body, V(w, y, 4), FRONT, 0.04)
-		local low = on(body, V(0, y - 0.28, 4), FRONT, 0.05)
-		b:Tri("Stripe" .. index, left, right, low, "Extra", THIN)
-	end
+	-- Two brown stripes across the back, lying flat on its facets.
+	facetBand(b, "Stripe1", body, V(0, 1.55, 4), FRONT, UP, 0.12, 0.42, "Extra")
+	facetBand(b, "Stripe2", body, V(0, 1.2, 4), FRONT, V(0, -1, 0), 0.14, 0.42, "Extra")
 
 	b:MirrorBone("LegFoot", V(0.45, 0.5, -0.1), nil, function()
 		bean(b, "Foot", V(0.45, 0.2, -0.35), V(0.62, 0.4, 0.95), "Body", THIN, 0.3)
 	end)
 	b:MirrorBone("Arm", V(0.48, 1.48, -0.5), { Phase = 0.5 }, function()
-		b:Limb("Arm", V(0.42, 1.6, -0.35), V(0.82, 1.02, -0.8), 0.36, "Body", { RingAt = 0.6, Thickness = 0.06 })
+		strut(b, "Arm", V(0.38, 1.62, -0.3), V(0.72, 1.06, -0.94), 0.36, 0.3, V(0.5, -1, 0.3), "Body", 0.55)
 	end)
 
 	b:Bone("Head", V(0, 1.85, -0.05), nil, function()
@@ -603,25 +664,25 @@ Designs["Voltmouse"] = function(b)
 		bean(b, "Foot", V(0.55, 0.22, -0.45), V(0.75, 0.44, 1.15), "Body", THIN, 0.3)
 	end)
 	b:MirrorBone("Arm", V(0.62, 1.72, -0.45), { Phase = 0.5 }, function()
-		b:Limb("Arm", V(0.47, 1.9, -0.38), V(0.95, 1.2, -0.92), 0.38, "Body", { RingAt = 0.6, Thickness = 0.06 })
+		strut(b, "Arm", V(0.45, 1.92, -0.36), V(0.84, 1.24, -1.04), 0.4, 0.34, V(0.5, -1, 0.3), "Body", 0.55)
 	end)
 
-	-- Long thin black tail (two bones so it whips) ending in a zig-zag yellow bolt.
-	local rings = tubeRings({ V(0, 0.8, 0.55), V(0, 0.42, 1.45), V(0, 1.15, 2.3), V(0, 2.15, 2.5) }, { 0, 0.12, 0.1, 0.08 }, 3, UP)
+	-- Long thin black tail (two bones so it whips) ending in a big yellow lightning bolt.
+	local rings = tubeRings({ V(0, 0.8, 0.55), V(0, 0.36, 1.3), V(0, 1.0, 1.95), V(0, 1.9, 2.05) }, { 0, 0.12, 0.1, 0.07 }, 3, UP)
 	b:Bone("Tail", V(0, 0.8, 0.7), nil, function()
 		tubeSegment(b, "Tail1", rings, 1, "Accent", THIN)
-		b:Bone("Tail2", V(0, 0.42, 1.45), nil, function()
+		b:Bone("Tail2", V(0, 0.36, 1.3), nil, function()
 			tubeSegment(b, "Tail2", rings, 2, "Accent", THIN)
 			tubeSegment(b, "Tail3", rings, 3, "Accent", THIN)
-			local function p(y: number, z: number): Vector3
-				return V(0, 2.1 + y * 1.4, 2.5 + z * 1.4)
+			-- Bolt in the tail's plane, narrow end on the tail tip: two slanted parallelograms (a classic zig-zag).
+			local function p(u: number, v: number): Vector3
+				return V(0, 1.84 + v * 1.45, 2.05 + (u - 0.3) * 1.45)
 			end
-			ribbon(b, "Bolt", {
-				{ p(0, -0.1), p(-0.05, 0.12) },
-				{ p(0.42, 0.18), p(0.28, 0.34) },
-				{ p(0.4, 0.38), p(0.24, 0.5) },
-			}, { "Extra" }, 0.12)
-			b:Tri("BoltTip", p(0.4, 0.38), p(1.0, 0.72), p(0.24, 0.5), "Extra", { Thickness = 0.12 })
+			local bolt = { Thickness = 0.12 }
+			b:Tri("BoltA", p(0.6, 1.0), p(0.12, 0.42), p(0.45, 0.45), "Extra", bolt)
+			b:Tri("BoltB", p(0.6, 1.0), p(0.45, 0.45), p(0.58, 0.6), "Extra", bolt)
+			b:Tri("BoltC", p(0.42, 0.47), p(0.3, 0.0), p(0.88, 0.6), "Extra", bolt)
+			b:Tri("BoltD", p(0.42, 0.47), p(0.88, 0.6), p(0.58, 0.6), "Extra", bolt)
 		end)
 	end)
 
@@ -634,10 +695,11 @@ Designs["Voltmouse"] = function(b)
 		-- Fur tufts sticking out under the cheeks.
 		b:MirrorSpike("Tuft", V(0.86, 2.8, -0.42), V(1.3, 2.5, -0.48), 0.28, 0.06, "Body")
 		b:MirrorBone("Ear", V(0.6, 3.6, -0.15), nil, function()
-			local base, tip = V(0.55, 3.5, -0.15), V(1.55, 4.95, 0.0)
+			local base, tip = V(0.55, 3.5, -0.15), V(1.38, 5.05, 0.0)
 			b:Spike("Ear", base, tip, 1.0, 0.42, "Accent", THIN, BACK)
 			innerFace(b, "EarInner", base, tip, 1.0, 0.42, BACK, 0.68, "Extra")
-			b:Spike("EarCurl", V(1.4, 4.75, -0.02), V(1.9, 4.55, 0.02), 0.32, 0.05, "Accent", THIN)
+			-- The tip curls outwards.
+			b:Spike("EarCurl", V(1.24, 4.82, -0.0), V(1.78, 4.7, 0.04), 0.36, 0.05, "Accent", THIN)
 		end)
 	end)
 end
@@ -688,49 +750,48 @@ Designs["Fennix"] = function(b)
 	end)
 end
 
--- Sleek black night fox: long banded ears, red eyes, a glowing ring on the forehead, gold bands on legs and tail.
+-- Sleek black night fox: long ears, slender legs and a long tail, each with a glowing gold ring, a gold ring on the
+-- forehead, red eyes and a short pointed muzzle.
 Designs["Moonfox"] = function(b)
 	local glow = { Neon = true, Thickness = 0.06 }
-	local body = lathe(
-		b,
-		"Body",
-		CFrame.new(0, 1.75, 0.3) * SIDEWAYS,
-		{ { -0.62, 0.55, 0.5, 0.04 }, { -0.05, 0.46, 0.42, 0.06 }, { 0.42, 0.58, 0.56, 0.1 } },
-		5,
-		V(0, -1.18, 0.08),
-		V(0, 1.0, 0.9),
-		"Body"
-	)
+	local body = b:Ball("Body", V(1.3, 1.3, 2.45), V(0, 1.5, 0.28), V(10, 0, 0), "Body")
 	b:SetCore(body)
-	for index, z in { -0.35, 0.95 } do
-		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(0.28, 1.6, z), { Phase = if index == 1 then 0 else 0.5 }, function()
-			-- The gold top segment is buried in the body: only a band shows under it.
+	-- Neck rising from the chest into the head.
+	b:Spike("Neck", V(0, 1.5, -0.45), V(0, 2.75, -0.95), 0.9, 0.74, "Body", THIN, FRONT)
+	for index, spec in { { -0.42, 0.3 }, { 0.98, 0.32 } } do
+		local z, x = spec[1], spec[2]
+		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(x, 1.3, z), { Phase = if index == 1 then 0 else 0.5 }, function()
+			-- Gold pyramid from deep in the body: only the band under the body shows.
 			column(
 				b,
 				"Leg",
-				{ V(0.27, 1.8, z), V(0.29, 1.36, z - 0.02), V(0.32, 0, z - 0.08) },
-				{ 0.12, 0.19, 0 },
+				{ V(x, 1.8, z), V(x + 0.01, 0.86, z - 0.02), V(x + 0.03, 0, z - 0.08) },
+				{ 0, 0.2, 0.12 },
 				{ { "Accent", glow }, "Body" },
-				nil,
-				THIN
+				1.9,
+				THIN,
+				true
 			)
 		end)
 	end
-	b:Bone("Tail", V(0, 1.95, 1.3), nil, function()
-		local base, tip = V(0, 1.85, 1.15), V(0, 3.35, 2.3)
-		b:Spike("Tail", base, tip, 0.62, 0.5, "Body", THIN, BACK)
-		collar(b, "TailRing", base, tip, 0.62, 0.5, 0.42, 0.56, "Accent", glow, BACK)
+
+	b:Bone("Tail", V(0, 1.75, 1.35), nil, function()
+		local base, tip = V(0, 1.65, 1.25), V(0, 3.3, 2.45)
+		b:Spike("Tail", base, tip, 0.72, 0.56, "Body", THIN, BACK)
+		collar(b, "TailRing", base, tip, 0.72, 0.56, 0.42, 0.56, "Accent", glow, BACK)
 	end)
 
-	b:Bone("Head", V(0, 2.35, -0.7), nil, function()
-		local head = b:Ball("Head", V(1.5, 1.35, 1.45), V(0, 2.95, -0.95), nil, "Body")
-		b:Spike("Muzzle", V(0, 2.75, -1.25), V(0, 2.62, -1.95), 0.6, 0.45, "Body", THIN, UP)
-		b:Eyes(head, 0.36, 0.1, V(0.36, 0.4, 0.3), Color3.fromRGB(220, 30, 40))
-		ringPatch(b, "ForeheadRing", head, 0, 0.42, 0.2, 0.12, 5, 0.03, "Accent", glow)
-		b:MirrorBone("Ear", V(0.4, 3.25, -0.9), nil, function()
-			local base, tip = V(0.36, 3.15, -0.9), V(0.98, 4.65, -0.72)
-			b:Spike("Ear", base, tip, 0.66, 0.38, "Body", THIN, BACK)
-			collar(b, "EarRing", base, tip, 0.66, 0.38, 0.42, 0.56, "Accent", glow, BACK)
+	b:Bone("Head", V(0, 2.3, -0.75), nil, function()
+		local head = b:Ball("Head", V(1.62, 1.42, 1.45), V(0, 2.8, -1.0), nil, "Body")
+		local snout, tip = V(0, 2.56, -1.3), V(0, 2.44, -1.98)
+		b:Spike("Muzzle", snout, tip, 0.74, 0.5, "Body", THIN, UP)
+		collar(b, "Nose", snout, tip, 0.74, 0.5, 0.84, 1.0, "Black", THIN, UP)
+		b:Eyes(head, 0.36, 0.08, V(0.36, 0.42, 0.3), Color3.fromRGB(220, 30, 40))
+		ringPatch(b, "ForeheadRing", head, 0, 0.44, 0.21, 0.12, 5, 0.03, "Accent", glow)
+		b:MirrorBone("Ear", V(0.38, 3.25, -0.9), nil, function()
+			local base, ear = V(0.36, 3.15, -0.9), V(0.92, 4.7, -0.72)
+			b:Spike("Ear", base, ear, 0.68, 0.38, "Body", THIN, BACK)
+			collar(b, "EarRing", base, ear, 0.68, 0.38, 0.45, 0.58, "Accent", glow, BACK)
 		end)
 	end)
 end
@@ -773,47 +834,48 @@ Designs["Quackle"] = function(b)
 	end)
 end
 
--- Tall blue swimmer duck: V-shaped torso, long cream bill, red forehead gem, swept-back crest, webbed hands.
+-- Tall blue swimmer duck: V-shaped torso, long cream bill, red forehead gem, swept-back crest, stern red eyes,
+-- webbed hands and feet.
 Designs["Mystduck"] = function(b)
 	local body = lathe(
 		b,
 		"Body",
-		CFrame.new(0, 2.15, 0.08),
-		{ { -0.55, 0.56, 0.46, 0.02 }, { 0.42, 0.72, 0.58, -0.06 } },
+		CFrame.new(0, 2.25, 0.05),
+		{ { -0.55, 0.5, 0.44, 0.02 }, { 0.4, 0.76, 0.58, -0.05 } },
 		5,
-		V(0, -0.92, 0.04),
-		V(0, 0.95, 0),
+		V(0, -1.02, 0.03),
+		V(0, 1.12, -0.05),
 		"Body"
 	)
 	b:SetCore(body)
-	b:MirrorBone("Leg", V(0.3, 1.6, 0.1), nil, function()
-		b:Limb("Leg", V(0.24, 1.85, 0.1), V(0.46, 0.1, -0.02), 0.58, "Body", { RingAt = 0.28, Thickness = 0.08 })
-		webFoot(b, "Foot", V(0.46, 0.2, -0.1), V(0.48, 0.04, -0.35), V(0.85, 0, 1.05), "Body", THIN)
+	b:MirrorBone("Leg", V(0.32, 1.55, 0.05), nil, function()
+		b:Limb("Leg", V(0.26, 1.85, 0.06), V(0.46, 0.16, 0.0), 0.62, "Body", { RingAt = 0.3, Thickness = 0.08 })
+		webFoot(b, "Foot", V(0.46, 0.22, -0.08), V(0.48, 0.03, -0.38), V(0.9, 0, 1.15), "Body", THIN)
 	end)
-	b:MirrorBone("Arm", V(0.6, 2.62, 0.02), { Phase = 0.5 }, function()
-		b:Limb("Arm", V(0.48, 2.7, 0.04), V(0.98, 1.62, -0.24), 0.36, "Body", { RingAt = 0.35, Thickness = 0.06 })
-		-- Webbed paddle: two facets fanning from the wrist to three finger tips.
-		local wrist = V(0.98, 1.72, -0.24)
+	b:MirrorBone("Arm", V(0.66, 2.78, 0.02), { Phase = 0.5 }, function()
+		b:Limb("Arm", V(0.52, 2.9, 0.04), V(1.02, 1.72, -0.26), 0.42, "Body", { RingAt = 0.32, Thickness = 0.06 })
+		-- Webbed hand: three fingers fanning from the wrist.
+		local wrist = V(1.0, 1.82, -0.24)
 		b:Mesh(
 			"Hand",
-			{ wrist, V(0.98, 1.16, -0.58), V(1.14, 1.08, -0.3), V(1.02, 1.18, -0.02) },
+			{ wrist, V(0.96, 1.2, -0.6), V(1.16, 1.1, -0.3), V(1.06, 1.22, 0.0) },
 			{ { 1, 2, 3 }, { 1, 3, 4 } },
 			"Body",
 			{ Thickness = 0.1 }
 		)
 	end)
 	b:Bone("Tail", V(0, 1.45, 0.45), nil, function()
-		b:Spike("Tail", V(0, 1.5, 0.4), V(0, 0.75, 1.35), 0.55, 0.25, "Body", THIN, UP)
+		prong(b, "Tail", V(0, 1.6, 0.3), V(0, 0.85, 1.32), 0.62, 0.32, V(0, 1, 0), "Body")
 	end)
 
-	b:Bone("Head", V(0, 3.0, -0.02), nil, function()
-		local head = b:Ball("Head", V(1.5, 1.32, 1.5), V(0, 3.58, -0.15), nil, "Body")
-		bill(b, "Bill", V(0, 3.32, -0.72), 0.76, 1.15, 0.32, "Belly", 0.06, 0.6)
-		b:Eyes(head, 0.34, 0.14, V(0.34, 0.38, 0.28), Color3.fromRGB(220, 40, 40))
-		disc(b, "Gem", head, 0, 0.42, 0.16, 5, 0.1, 0.03, "Accent", { Neon = true, Thickness = 0.05 })
+	b:Bone("Head", V(0, 3.2, -0.02), nil, function()
+		local head = b:Ball("Head", V(1.62, 1.42, 1.55), V(0, 3.88, -0.15), nil, "Body")
+		bill(b, "Bill", V(0, 3.56, -0.72), 0.82, 1.25, 0.34, "Belly", 0.08, 0.6)
+		b:Eyes(head, 0.36, 0.16, V(0.34, 0.38, 0.28), Color3.fromRGB(220, 40, 40), "Angry")
+		disc(b, "Gem", head, 0, 0.47, 0.19, 6, 0.1, 0.03, "Accent", { Neon = true, Thickness = 0.05 })
 		-- Swept-back crest.
-		b:Spike("Crest", V(0, 4.08, -0.1), V(0, 3.98, 1.1), 0.46, 0.32, "Body", THIN, UP)
-		b:Spike("Crest2", V(0, 3.78, 0.1), V(0, 3.5, 0.95), 0.36, 0.24, "Body", THIN, UP)
+		prong(b, "Crest", V(0, 4.5, -0.15), V(0, 4.42, 1.15), 0.5, 0.4, V(0, -1, 0), "Body")
+		prong(b, "Crest2", V(0, 4.2, 0.12), V(0, 3.86, 1.02), 0.42, 0.32, V(0, -1, 0), "Body")
 	end)
 end
 
@@ -872,48 +934,44 @@ Designs["Coinpurr"] = function(b)
 	end)
 end
 
--- Elegant cat on four slender legs: broad head, red forehead jewel, haughty eyes, long whiskers, curled tail.
+-- Elegant cream cat on four slender legs: broad flat head with puffed cheek fur, a red jewel on the forehead,
+-- haughty red eyes, long whiskers, dark ears and a long tail held high, curling at the tip.
 Designs["Regalynx"] = function(b)
-	local body = lathe(
-		b,
-		"Body",
-		CFrame.new(0, 1.55, 0.35) * SIDEWAYS,
-		{ { -0.65, 0.5, 0.5 }, { 0.4, 0.55, 0.52, 0.05 } },
-		5,
-		V(0, -1.2, 0.05),
-		V(0, 1.0, 0.7),
-		"Body"
-	)
+	local body = b:Ball("Body", V(1.3, 1.22, 2.4), V(0, 1.62, 0.3), V(12, 0, 0), "Body")
 	b:SetCore(body)
-	for index, z in { -0.35, 1.0 } do
-		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(0.32, 1.35, z), { Phase = if index == 1 then 0 else 0.5 }, function()
-			column(b, "Leg", { V(0.32, 1.5, z), V(0.35, 0, z - 0.06) }, { 0.17, 0.1 }, { "Body" }, 2.0, THIN)
+	for index, spec in { { -0.45, 0.32 }, { 1.0, 0.34 } } do
+		local z, x = spec[1], spec[2]
+		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(x, 1.35, z), { Phase = if index == 1 then 0 else 0.5 }, function()
+			strut(b, "Leg", V(x - 0.02, 1.6, z + 0.05), V(x + 0.03, 0.14, z - 0.06), 0.42, 0.34, V(0.4, 0, 1), "Body", 0.3)
+			paw(b, "Paw", V(x + 0.03, 0.11, z - 0.14), V(0.44, 0.22, 0.48), "Body", THIN)
 		end)
 	end
-	-- Long thin tail rising behind, curling forwards at the tip.
-	local rings = tubeRings({ V(0, 1.7, 1.05), V(0, 2.1, 1.75), V(0, 2.95, 1.98), V(0, 3.35, 1.55) }, { 0, 0.12, 0.1, 0 }, 3, UP)
-	b:Bone("Tail", V(0, 1.75, 1.2), nil, function()
+	-- Long tail held high, curling forwards at the tip.
+	local rings = tubeRings({ V(0, 1.75, 1.3), V(0, 2.2, 1.95), V(0, 3.05, 2.2), V(0, 3.55, 1.75) }, { 0, 0.14, 0.11, 0 }, 3, UP)
+	b:Bone("Tail", V(0, 1.8, 1.4), nil, function()
 		tubeSegment(b, "Tail1", rings, 1, "Body", THIN)
-		b:Bone("Tail2", V(0, 2.1, 1.75), nil, function()
+		b:Bone("Tail2", V(0, 2.2, 1.95), nil, function()
 			tubeSegment(b, "Tail2", rings, 2, "Body", THIN)
 			tubeSegment(b, "Tail3", rings, 3, "Body", THIN)
 		end)
 	end)
 
-	b:Bone("Head", V(0, 2.3, -0.7), nil, function()
-		local head = b:Ball("Head", V(2.15, 1.4, 1.5), V(0, 2.75, -1.0), nil, "Body")
-		-- Puffed cheeks: flat tufts pointing out and down.
-		b:MirrorTri("Cheek", V(0.75, 2.85, -1.05), V(0.8, 2.35, -1.25), V(1.3, 2.3, -1.05), "Body", { Thickness = 0.08 })
-		disc(b, "Jewel", head, 0, 0.36, 0.22, 6, 0.12, 0.03, "Accent", { Neon = true, Thickness = 0.05 })
-		b:Eyes(head, 0.4, 0.05, V(0.36, 0.32, 0.28), Color3.fromRGB(200, 30, 50), "Angry")
-		faceTri(b, "Nose", head, 0, -0.28, 0.16, 0.1, "Blush")
-		b:Mouth(head, -0.44, 0.3)
-		b:MirrorSpike("WhiskerA", V(0.55, 2.55, -1.55), V(1.8, 2.85, -1.5), 0.06, 0.02, "Extra")
-		b:MirrorSpike("WhiskerB", V(0.55, 2.45, -1.55), V(1.75, 2.18, -1.4), 0.06, 0.02, "Extra")
-		b:MirrorBone("Ear", V(0.55, 3.2, -0.95), nil, function()
-			local base, tip = V(0.52, 3.1, -0.93), V(1.08, 4.0, -0.85)
-			b:Spike("Ear", base, tip, 0.72, 0.3, "Extra", THIN, BACK)
-			innerFace(b, "EarInner", base, tip, 0.72, 0.3, BACK, 0.6, "Blush")
+	b:Bone("Head", V(0, 2.2, -0.7), nil, function()
+		local head = b:Ball("Head", V(2.1, 1.45, 1.55), V(0, 2.68, -0.95), nil, "Body")
+		-- Puffed cheek fur sticking out on each side.
+		for _, side in { -1, 1 } do
+			prong(b, "Tuft" .. side, V(side * 0.72, 2.5, -1.05), V(side * 1.45, 2.22, -1.12), 0.62, 0.34, BACK, "Body")
+		end
+		disc(b, "Jewel", head, 0, 0.36, 0.21, 5, 0.12, 0.03, "Accent", { Neon = true, Thickness = 0.05 })
+		b:Eyes(head, 0.42, 0.04, V(0.38, 0.32, 0.28), Color3.fromRGB(200, 30, 50), "Angry")
+		faceTri(b, "Nose", head, 0, -0.26, 0.17, 0.11, "Blush")
+		b:Mouth(head, -0.44, 0.28)
+		b:MirrorSpike("WhiskerA", V(0.55, 2.52, -1.6), V(1.85, 2.85, -1.55), 0.06, 0.02, "Extra")
+		b:MirrorSpike("WhiskerB", V(0.55, 2.42, -1.6), V(1.8, 2.15, -1.45), 0.06, 0.02, "Extra")
+		b:MirrorBone("Ear", V(0.6, 3.15, -0.95), nil, function()
+			local base, tip = V(0.58, 3.05, -0.93), V(1.02, 3.95, -0.85)
+			b:Spike("Ear", base, tip, 0.74, 0.3, "Extra", THIN, BACK)
+			innerFace(b, "EarInner", base, tip, 0.74, 0.3, BACK, 0.6, "Blush")
 		end)
 	end)
 end
