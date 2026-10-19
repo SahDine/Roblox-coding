@@ -304,7 +304,8 @@ end
 
 -- Faceted coin / gem on the front of a shape: a fan of `sides` triangles around a raised centre (on the centre line it
 -- faces straight out of the shape, so it stays symmetric).
--- radius: a number, or Vector2(width, height) / 2 for an oval.
+-- radius: a number, or Vector2(width, height) / 2 for an oval. tilt (degrees): face this far above straight ahead
+-- instead of along the surface (a coin standing up on a sloping forehead).
 local function disc(
 	b,
 	name: string,
@@ -316,10 +317,14 @@ local function disc(
 	raise: number,
 	lift: number,
 	color: any,
-	opts: any?
+	opts: any?,
+	tilt: number?
 )
 	local frame = b:OnSurface(shape, x, y)
-	if x == 0 then
+	if tilt then
+		local point = frame.Position
+		frame = CFrame.lookAt(point, point + FRONT * math.cos(math.rad(tilt)) + UP * math.sin(math.rad(tilt)), UP)
+	elseif x == 0 then
 		-- On the centre line the ray can land on a facet seam (tilted to one side): face straight out instead.
 		local point, half = frame.Position, shape.Size / 2
 		local out = V(0, (point.Y - shape.Center.Y) / (half.Y * half.Y), (point.Z - shape.Center.Z) / (half.Z * half.Z))
@@ -595,7 +600,7 @@ Designs["Zappip"] = function(b)
 		{ { -0.3, 0.96, 0.8 }, { 0.38, 0.76, 0.66 } },
 		5,
 		V(0, -0.86, 0),
-		V(0, 0.88, 0),
+		V(0, 1.35, -0.05),
 		"Body",
 		nil,
 		0.5
@@ -666,7 +671,7 @@ Designs["Voltmouse"] = function(b)
 		{ { -0.34, 1.16, 0.98 }, { 0.44, 0.9, 0.78 } },
 		5,
 		V(0, -1.02, 0),
-		V(0, 1.02, 0),
+		V(0, 1.55, -0.05),
 		function(c: Vector3)
 			local angle = math.deg(math.atan2(c.X - center.X, center.Z - c.Z))
 			return if math.abs(angle) <= 45 and c.Y < center.Y + 0.4 then "Belly" else "Body"
@@ -875,7 +880,7 @@ Designs["Quackle"] = function(b)
 		{ { -0.6, 0.92, 0.86 }, { -0.05, 1.04, 0.95 }, { 0.48, 0.8, 0.74 } },
 		4,
 		V(0, -0.88, 0),
-		V(0, 0.95, 0),
+		V(0, 1.45, -0.05),
 		"Body"
 	)
 	b:SetCore(body)
@@ -963,8 +968,16 @@ end
 -- curly brown-tipped tail.
 Designs["Coinpurr"] = function(b)
 	-- Small pear-shaped body standing upright (20 facets).
-	local body =
-		lathe(b, "Body", CFrame.new(0, 1.2, 0.05), { { -0.28, 0.64, 0.56 }, { 0.32, 0.5, 0.46 } }, 5, V(0, -0.62, 0), V(0, 0.72, 0), "Body")
+	local body = lathe(
+		b,
+		"Body",
+		CFrame.new(0, 1.2, 0.05),
+		{ { -0.28, 0.64, 0.56 }, { 0.32, 0.5, 0.46 } },
+		5,
+		V(0, -0.62, 0),
+		V(0, 1.05, -0.05),
+		"Body"
+	)
 	b:SetCore(body)
 	b:MirrorBone("Leg", V(0.28, 0.78, 0.05), nil, function()
 		b:Spike("Leg", V(0.27, 0.92, 0.06), V(0.32, 0.1, -0.02), 0.38, 0.34, "Body", THIN)
@@ -992,13 +1005,14 @@ Designs["Coinpurr"] = function(b)
 			{ { -0.26, 1.16, 0.84 }, { 0.3, 1.06, 0.8 } },
 			5,
 			V(0, -0.8, 0.05),
-			V(0, 0.86, 0.05),
+			V(0, 0.86, -0.12),
 			"Body"
 		)
 		-- Oval gold coin: a bright rim around a darker raised centre.
 		local foil = { Material = Enum.Material.Foil, Thickness = 0.06 }
-		disc(b, "Coin", head, 0, 0.45, Vector2.new(0.36, 0.44), 8, 0.06, 0.05, "Gold", foil)
-		disc(b, "CoinFace", head, 0, 0.45, Vector2.new(0.2, 0.28), 4, 0.08, 0.1, Color3.fromRGB(225, 160, 30), foil)
+		-- It stands up on the sloping forehead (its lower edge sinks in a little), so it reads as a coin from the front.
+		disc(b, "Coin", head, 0, 0.44, Vector2.new(0.34, 0.42), 8, 0.04, 0.02, "Gold", foil, 30)
+		disc(b, "CoinFace", head, 0, 0.44, Vector2.new(0.19, 0.27), 4, 0.025, 0.05, Color3.fromRGB(225, 160, 30), foil, 30)
 		b:Eyes(head, 0.48, 0.02, V(0.4, 0.58, 0.3), "White")
 		b:Mouth(head, -0.42, 0.4, true)
 		faceTri(b, "Nose", head, 0, -0.2, 0.16, 0.1, "Blush")
@@ -1074,8 +1088,8 @@ Designs["Regalynx"] = function(b)
 		faceTri(b, "Nose", head, 0, -0.26, 0.17, 0.11, "Blush")
 		b:Mouth(head, -0.42, 0.28)
 		for _, side in { -1, 1 } do
-			whisker(b, "WhiskerA" .. side, V(side * 0.55, 2.55, -1.55), V(side * 1.95, 2.9, -1.5), 0.07, "Extra")
-			whisker(b, "WhiskerB" .. side, V(side * 0.55, 2.45, -1.55), V(side * 1.9, 2.15, -1.4), 0.07, "Extra")
+			whisker(b, "WhiskerA" .. side, V(side * 0.7, 2.56, -1.42), V(side * 2.0, 2.88, -1.45), 0.06, "Extra")
+			whisker(b, "WhiskerB" .. side, V(side * 0.7, 2.44, -1.42), V(side * 1.95, 2.18, -1.35), 0.06, "Extra")
 		end
 		b:MirrorBone("Ear", V(0.6, 3.2, -0.88), nil, function()
 			local base, tip = V(0.58, 3.1, -0.86), V(1.04, 4.02, -0.78)

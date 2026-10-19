@@ -335,9 +335,13 @@ end
 
 -- Braziers ----------------------------------------------------------------------------------
 
+local FLAME = Color3.fromRGB(255, 140, 50)
+local FLAME_CORE = Color3.fromRGB(255, 226, 110)
+
 --[[
 	Fire brazier: a slim iron post carrying a faceted bowl (an upside-down pentagonal pyramid whose
-	tip rests on the post) with a fire and a warm light (~12 parts). Non-collidable.
+	tip rests on the post) holding a low-poly flame (two glowing pyramids, the inner one taller
+	and turned) with rising embers and a warm light (~26 parts). Non-collidable.
 ]]
 function Landmarks.Brazier(parent: Instance, base: Vector3, height: number, accent: Color3): Model
 	local model = newModel("Brazier", parent)
@@ -351,15 +355,35 @@ function Landmarks.Brazier(parent: Instance, base: Vector3, height: number, acce
 	}, model)
 	local rim = base + Vector3.new(0, height + 1, 0)
 	local bowl = facets("BrazierBowl", IRON:Lerp(accent, 0.25), Enum.Material.Metal)
-	local parts = LowPoly.DrawTriangles(LowPoly.ConeTriangles(rim, base + Vector3.new(0, height, 0), 1.1, 5, false), bowl, model, 0.1)
-	local fire = Instance.new("Fire")
-	fire.Size = 3
-	fire.Heat = 6
-	fire.Color = Color3.fromRGB(255, 140, 40)
-	fire.SecondaryColor = Color3.fromRGB(255, 220, 90)
-	fire.Parent = invisibleAnchor("BrazierFire", CFrame.new(rim + Vector3.new(0, 0.2, 0)), Vector3.new(1, 0.4, 1), model)
-	if parts[1] then
-		Decor.Light(parts[1], Color3.fromRGB(255, 170, 80), 16, 1.8)
+	LowPoly.DrawTriangles(LowPoly.ConeTriangles(rim, base + Vector3.new(0, height, 0), 1.1, 5, false), bowl, model, 0.1)
+
+	-- The flame rises from inside the bowl: its foot ring (0.7) stays within the bowl's pentagon
+	-- 0.15 under the rim (inradius 1.1 * 0.85 * cos 36 = 0.76).
+	local foot = rim - Vector3.new(0, 0.15, 0)
+	local outer = LowPoly.DrawTriangles(
+		LowPoly.ConeTriangles(foot, foot + Vector3.new(0.1, 2.3, 0), 0.7, 4, false, Vector3.xAxis),
+		glowProps("Flame", FLAME),
+		model,
+		0.08
+	)
+	LowPoly.DrawTriangles(
+		LowPoly.ConeTriangles(foot, foot + Vector3.new(-0.1, 2.9, 0.05), 0.4, 3, false, Vector3.zAxis),
+		glowProps("FlameCore", FLAME_CORE),
+		model,
+		0.08
+	)
+	local embers = Instance.new("ParticleEmitter")
+	embers.Color = ColorSequence.new(FLAME_CORE, FLAME)
+	embers.LightEmission = 1
+	embers.Rate = 6
+	embers.Lifetime = NumberRange.new(0.8, 1.6)
+	embers.Speed = NumberRange.new(1.5, 3)
+	embers.SpreadAngle = Vector2.new(20, 20)
+	embers.EmissionDirection = Enum.NormalId.Top
+	embers.Size = NumberSequence.new(0.18, 0)
+	embers.Parent = invisibleAnchor("BrazierEmbers", CFrame.new(rim + Vector3.new(0, 1, 0)), Vector3.new(1, 0.4, 1), model)
+	if outer[1] then
+		Decor.Light(outer[1], Color3.fromRGB(255, 170, 80), 16, 1.8)
 	end
 	return model
 end

@@ -52,6 +52,8 @@ local BASE_MARGIN = 8 -- free ground kept around every base and path
 local SPAWN_RADIUS = 30
 local POND_RADIUS = 22
 local PORTAL_X = HALF_CONVEYOR + 2
+local CAMERA_REACH = 72 -- StarterPlayer.CameraMaxZoomDistance (64) plus a margin
+local CHARACTER_CEILING = 100 -- no character stands higher (castle towers are ~30 studs tall)
 
 local STONE = Color3.fromRGB(150, 145, 160)
 local GOLD = Color3.fromRGB(255, 205, 80)
@@ -538,7 +540,7 @@ local function buildGardens(decor: Folder)
 				end
 				for _, dx in { -1, 1 } do
 					gardenBed(x + dx * 16, side * 23.5, 4)
-					Flora.FlowerPatch(gardens, Vector3.new(x + dx * 16, 0, side * 23.5), 3, 5, seed + dx)
+					Flora.FlowerPatch(gardens, Vector3.new(x + dx * 16, 0, side * 23.5), 3.2, 7, seed + dx)
 				end
 				-- A bush on one side (alternating from one garden to the next).
 				local flip = if (column + (if side > 0 then 1 else 0)) % 2 == 0 then 1 else -1
@@ -719,6 +721,13 @@ local function buildHorizon(decor: Folder)
 	-- Each peak is pushed outwards until its foot clears the playable area and the ring of hills
 	-- (the ellipse alone passes too close to the corners of the rectangular map).
 	local clearX, clearZ = MapService.HalfWidth + 60, MapService.HalfDepth + 60
+	-- Characters stay in the playable area (up to the top of the castles) and cameras within the
+	-- maximum zoom of them, so the far side of every peak is never seen and is not built.
+	local viewBox = {
+		Min = Vector3.new(-MapService.HalfWidth, 0, -MapService.HalfDepth),
+		Max = Vector3.new(MapService.HalfWidth, CHARACTER_CEILING, MapService.HalfDepth),
+		Reach = CAMERA_REACH,
+	}
 	local count = 13
 	for index = 0, count - 1 do
 		local angle = (index + rng:NextNumber(-0.15, 0.15)) * math.pi * 2 / count
@@ -735,7 +744,7 @@ local function buildHorizon(decor: Folder)
 			position += direction.Unit * (-gap + 1)
 		end
 		local height = rng:NextNumber(95, 160)
-		Horizon.Mountain(sky, position, radius, height, 900 + index, height > 115, 5)
+		Horizon.Mountain(sky, position, radius, height, 900 + index, height > 115, 5, viewBox)
 	end
 
 	-- Big clouds drifting above the forest, in front of the mountains.

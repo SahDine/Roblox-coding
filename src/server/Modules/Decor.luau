@@ -32,38 +32,6 @@ function Decor.Part(props: Props, parent: Instance): BasePart
 	return part
 end
 
-function Decor.Ellipsoid(name: string, size: Vector3, cframe: CFrame, color: Color3, parent: Instance, props: Props?): BasePart
-	local options = props or {}
-	options.Name = name
-	options.Size = size
-	options.CFrame = cframe
-	options.Color = color
-	local part = Decor.Part(options, parent)
-	local mesh = Instance.new("SpecialMesh")
-	mesh.MeshType = Enum.MeshType.Sphere
-	mesh.Parent = part
-	return part
-end
-
--- Upright cylinder whose base sits at `base`.
-function Decor.Column(
-	name: string,
-	height: number,
-	diameter: number,
-	base: Vector3,
-	color: Color3,
-	parent: Instance,
-	props: Props?
-): BasePart
-	local options = props or {}
-	options.Name = name
-	options.Shape = Enum.PartType.Cylinder
-	options.Size = Vector3.new(height, diameter, diameter)
-	options.CFrame = CFrame.new(base + Vector3.new(0, height / 2, 0)) * CFrame.Angles(0, 0, math.rad(90))
-	options.Color = color
-	return Decor.Part(options, parent)
-end
-
 function Decor.Light(part: BasePart, color: Color3, range: number, brightness: number?)
 	local light = Instance.new("PointLight")
 	light.Color = color

@@ -55,9 +55,42 @@ local function ring(
 	return points
 end
 
+-- Where the scenery can be seen from: any point within `Reach` studs (the camera's zoom distance)
+-- of the box `Min`..`Max` that holds every character.
+export type ViewBox = { Min: Vector3, Max: Vector3, Reach: number }
+
+--[[
+	Drops the facets of a closed opaque mesh whose outer side faces away from every possible camera
+	position: they are never seen (from behind a facet, the facets in front hide it), so the far
+	side of a distant mountain costs no part. A facet is seen from somewhere in the view region when
+	its plane passes less than `Reach` studs behind one of the corners of the box.
+]]
+local function facingView(triangles: Triangles, view: ViewBox): Triangles
+	local corners = {}
+	for _, x in { view.Min.X, view.Max.X } do
+		for _, y in { view.Min.Y, view.Max.Y } do
+			for _, z in { view.Min.Z, view.Max.Z } do
+				table.insert(corners, Vector3.new(x, y, z))
+			end
+		end
+	end
+	local kept = {}
+	for _, triangle in triangles do
+		local normal = Decor.Normal(triangle)
+		for _, corner in corners do
+			if (corner - triangle.A):Dot(normal) > -view.Reach then
+				table.insert(kept, triangle)
+				break
+			end
+		end
+	end
+	return kept
+end
+
 --[[
 	Mountain on the ground point `base`: a jagged base ring, a shoulder ring, a summit ring and a
 	peak (5 * sides triangles). Snowy mountains get a zig-zag snow cap.
+	viewBox (optional): where the mountain is seen from; the facets turned away from it are skipped.
 ]]
 function Horizon.Mountain(
 	parent: Instance,
@@ -66,7 +99,8 @@ function Horizon.Mountain(
 	height: number,
 	seed: number,
 	snowy: boolean,
-	sides: number?
+	sides: number?,
+	viewBox: ViewBox?
 ): Model
 	local rng = Decor.Rng(seed)
 	local model = newModel("Mountain", parent)
@@ -91,6 +125,9 @@ function Horizon.Mountain(
 		add(upper, shoulder[k], shoulder[k1], summit[k])
 		add(if snowy then snow else upper, summit[k], shoulder[k1], summit[k1])
 		add(if snowy then snow else upper, summit[k], summit[k1], peak)
+	end
+	if viewBox then
+		lower, upper, snow = facingView(lower, viewBox), facingView(upper, viewBox), facingView(snow, viewBox)
 	end
 	local thickness = 1
 	Decor.DrawShaded(lower, farProps("Slope", MOUNTAIN_FOOT), model, thickness, rng, 0.06, function(normal: Vector3): Color3?
