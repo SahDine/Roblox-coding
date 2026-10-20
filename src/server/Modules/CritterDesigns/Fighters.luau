@@ -6,8 +6,6 @@
 	balls and lathes and paint some of their facets (bellies, masks, faces) without extra parts.
 ]]
 
-local LowPoly = require(script.Parent.Parent.LowPoly)
-
 local V = Vector3.new
 local V2 = Vector2.new
 
@@ -72,7 +70,16 @@ end
 
 -- Groups faces by colour and draws one mesh per colour (all sharing the vertex list, so the plates keep the
 -- same inside point); returns one handle covering every facet for the face helpers.
-local function paintedMesh(b, name: string, vertices: { Vector3 }, faces: { { number } }, colorOf, center: Vector3, size: Vector3, opts: any?)
+local function paintedMesh(
+	b,
+	name: string,
+	vertices: { Vector3 },
+	faces: { { number } },
+	colorOf,
+	center: Vector3,
+	size: Vector3,
+	opts: any?
+)
 	local groups, order = {}, {}
 	for _, face in faces do
 		local color = colorOf(face)
@@ -159,7 +166,18 @@ end
 	faces the front (-Z) of the frame. `color` is a colour or function(facetCentre, normal) -> colour.
 	2 * sides triangles per ring gap plus `sides` per closed end, ~2 parts each.
 ]]
-local function lathe(b, name: string, frame: CFrame, rings: { { number } }, sides: number, bottom: Vector3?, top: Vector3?, color: any, opts: any?, twist: number?)
+local function lathe(
+	b,
+	name: string,
+	frame: CFrame,
+	rings: { { number } },
+	sides: number,
+	bottom: Vector3?,
+	top: Vector3?,
+	color: any,
+	opts: any?,
+	twist: number?
+)
 	local vertices, faces = {}, {}
 	for i, ring in rings do
 		local y, rx = ring[1], ring[2]
@@ -238,7 +256,17 @@ end
 	(projected on the facet), shortened until its point still touches the body, lifted off it. Not inside a mirrored
 	bone (the points are already in actual space).
 ]]
-local function stripe(b, name: string, shape, origin: Vector3, direction: Vector3, toward: Vector3, length: number, width: number, color: any)
+local function stripe(
+	b,
+	name: string,
+	shape,
+	origin: Vector3,
+	direction: Vector3,
+	toward: Vector3,
+	length: number,
+	width: number,
+	color: any
+)
 	local point, normal = cast(shape, origin, direction.Unit)
 	assert(point and normal, "stripe ray missed the shape")
 	local d = (toward - normal * toward:Dot(normal)).Unit
@@ -283,7 +311,17 @@ local function feather(b, name: string, base: Vector3, tip: Vector3, width: numb
 end
 
 -- `count` claws (1 part each) spread along `across` around `at`, pointing along `direction`.
-local function claws(b, name: string, at: Vector3, direction: Vector3, across: Vector3, count: number, spread: number, size: number, color: any?)
+local function claws(
+	b,
+	name: string,
+	at: Vector3,
+	direction: Vector3,
+	across: Vector3,
+	count: number,
+	spread: number,
+	size: number,
+	color: any?
+)
 	local side = across.Unit
 	local facing = direction:Cross(side)
 	for index = 1, count do
@@ -362,8 +400,25 @@ local function spikeFrame(base: Vector3, tip: Vector3, hint: Vector3?): (Vector3
 	return y:Cross(z), y, z
 end
 
+-- Frame at `base` whose +Y points at `tip` and whose +Z leans towards `back`: a lathe along any axis (tails).
+local function axisFrame(base: Vector3, tip: Vector3, back: Vector3): CFrame
+	local y = (tip - base).Unit
+	local z = (back - y * back:Dot(y)).Unit
+	return CFrame.fromMatrix(base, y:Cross(z), y, z)
+end
+
 -- Flat triangle lying on the face of a Spike pyramid opposite its ridge (inner ears), shrunk by `scale`.
-local function innerFace(b, name: string, base: Vector3, tip: Vector3, width: number, depth: number, hint: Vector3?, scale: number, color: any)
+local function innerFace(
+	b,
+	name: string,
+	base: Vector3,
+	tip: Vector3,
+	width: number,
+	depth: number,
+	hint: Vector3?,
+	scale: number,
+	color: any
+)
 	local x, _, z = spikeFrame(base, tip, hint)
 	local front = base + z * (depth * 0.6)
 	local left = base - x * (width / 2) - z * (depth * 0.4)
@@ -384,7 +439,19 @@ end
 	Band around a Spike pyramid (nose tips, rings): a slightly wider, steeper pyramid on the same axis that starts at
 	fraction t0 of the spike and dives back into it at t1, so only that band shows (6 parts).
 ]]
-local function collar(b, name: string, base: Vector3, tip: Vector3, width: number, depth: number, t0: number, t1: number, color: any, opts: any?, hint: Vector3?)
+local function collar(
+	b,
+	name: string,
+	base: Vector3,
+	tip: Vector3,
+	width: number,
+	depth: number,
+	t0: number,
+	t1: number,
+	color: any,
+	opts: any?,
+	hint: Vector3?
+)
 	local grow = 1.14
 	local s0 = 1 - t0
 	local t2 = (grow * s0 * t1 - (1 - t1) * t0) / (grow * s0 - (1 - t1))
@@ -393,27 +460,22 @@ local function collar(b, name: string, base: Vector3, tip: Vector3, width: numbe
 end
 
 --[[
-	Fluffy tail / lock: a three-sided spindle from `root` through a ring of radius `radius` around `ring` to `tip`
-	(the tip may bend away from the root-ring line: a curl). Root half in rootColor, tip half in tipColor, ~12 parts.
-	`up` turns the ring (one ridge towards it).
-]]
-local function plume(b, name: string, root: Vector3, ring: Vector3, tip: Vector3, radius: number, rootColor: any, tipColor: any, up: Vector3?)
-	local u, v = LowPoly.Perpendiculars(ring - root, up)
-	local vertices = { root, tip }
-	for k = 0, 2 do
-		local a = k * TAU / 3
-		table.insert(vertices, ring + (u * math.cos(a) + v * math.sin(a)) * radius)
-	end
-	b:Mesh(name, vertices, { { 1, 3, 4 }, { 1, 4, 5 }, { 1, 5, 3 } }, rootColor, THIN)
-	return b:Mesh(name .. "Tip", vertices, { { 2, 4, 3 }, { 2, 5, 4 }, { 2, 3, 5 } }, tipColor, THIN)
-end
-
---[[
 	Fluffy collar (ruffs, manes): a star-shaped skirt from `apex` (hidden in the neck) down to a zig-zag rim of
 	`count` tufts around `center`: tips reach `inner + reach` and fall `drop` (Vector2(front, back): longer and lower
 	at the front), notches stay close in. 2 facets per tuft (~4 parts); open underneath (the body fills it).
 ]]
-local function ruff(b, name: string, apex: Vector3, center: Vector3, inner: number, count: number, reach: Vector2, drop: Vector2, color: any, twist: number?)
+local function ruff(
+	b,
+	name: string,
+	apex: Vector3,
+	center: Vector3,
+	inner: number,
+	count: number,
+	reach: Vector2,
+	drop: Vector2,
+	color: any,
+	twist: number?
+)
 	local vertices, faces = { apex }, {}
 	local points = count * 2
 	for k = 0, points - 1 do
@@ -541,24 +603,40 @@ Designs["Growlpup"] = function(b)
 		end)
 	end
 	-- Cream ruff on the chest, longest under the chin.
-	ruff(b, "Ruff", V(0, 1.5, -0.3), V(0, 1.12, -0.36), 0.32, 4, V2(0.3, 0.24), V2(0.42, 0.14), "Belly", 0)
+	ruff(b, "Ruff", V(0, 1.5, -0.3), V(0, 1.12, -0.36), 0.34, 3, V2(0.34, 0.24), V2(0.46, 0.14), "Belly", 0)
 
-	-- Cream bushy tail curling up behind.
-	b:Bone("Tail", V(0, 1.05, 1.08), nil, function()
-		plume(b, "Tail", V(0, 0.98, 1.02), V(0, 1.62, 1.42), V(0, 2.08, 1.2), 0.36, "Belly", "Belly", BACK)
+	-- Cream bushy tail rising behind, curling forwards at the tip (12 facets).
+	b:Bone("Tail", V(0, 1.1, 1.05), nil, function()
+		local base, tip = V(0, 0.98, 0.98), V(0, 2.3, 1.62)
+		lathe(
+			b,
+			"Tail",
+			axisFrame(base, tip, BACK),
+			{ { 0.42, 0.3, 0.26 }, { 0.98, 0.34, 0.3, -0.04 } },
+			3,
+			V(0, 0, 0),
+			V(0, 1.5, -0.32),
+			"Belly",
+			THIN,
+			0.5
+		)
 	end)
 
 	b:Bone("Head", V(0, 1.25, -0.3), nil, function()
-		local head = sculpt(b, "Head", V(1.56, 1.38, 1.4), V(0, 1.75, -0.6), nil, "Body", { Deform = domed(0.9, snout(0.2, 0.8, 0.04)) })
+		-- Big round head with a short cream muzzle (its lower front facets pushed forwards and painted cream).
+		local head = sculpt(b, "Head", V(1.56, 1.38, 1.4), V(0, 1.75, -0.6), nil, "Body", {
+			Deform = domed(0.9, snout(0.3, 0.72, 0.04)),
+			Paint = function(normal: Vector3)
+				return if normal.Y < 0.25 and normal.Z < -0.45 and math.abs(normal.X) < 0.75 then "Belly" else nil
+			end,
+		})
 		b:Eyes(head, 0.36, 0.14, V(0.36, 0.44, 0.3), DOG_EYE)
-		-- Short cream muzzle with a black nose, the open mouth under it.
-		local muzzle = b:Spike("Muzzle", V(0, 1.5, -1.0), V(0, 1.44, -1.5), 0.62, 0.46, "Belly", THIN, UP)
-		faceTri(b, "Nose", muzzle, 0, 0.1, 0.2, 0.13, "Black", 0.04)
+		faceTri(b, "Nose", head, 0, -0.14, 0.22, 0.14, "Black", 0.04)
 		b:Mouth(head, -0.42, 0.26, true)
 		-- Spiky cream forelock on the crown: the middle tuft sweeps up and back, two smaller ones beside it.
-		prong(b, "Tuft", V(0, 2.08, -0.6), V(0, 2.82, -0.3), 0.74, 0.5, FRONT, "Belly")
+		prong(b, "Tuft", V(0, 2.1, -0.7), V(0, 2.74, -0.08), 0.7, 0.48, FRONT, "Belly")
 		for _, side in { -1, 1 } do
-			prong(b, "TuftSide" .. side, V(side * 0.22, 2.05, -0.55), V(side * 0.5, 2.62, -0.2), 0.5, 0.36, FRONT, "Belly")
+			prong(b, "TuftSide" .. side, V(side * 0.22, 2.06, -0.6), V(side * 0.5, 2.56, -0.12), 0.48, 0.34, FRONT, "Belly")
 		end
 		b:MirrorBone("Ear", V(0.48, 2.1, -0.45), nil, function()
 			local base, tip = V(0.45, 2.02, -0.45), V(1.02, 2.62, -0.36)
@@ -571,43 +649,53 @@ end
 -- Majestic fire hound standing tall: a huge cream mane around the neck and chest, a cream forelock swept back over
 -- the head, black tiger stripes, cream feathering on the legs and a big bushy cream tail.
 Designs["Blazehound"] = function(b)
+	-- Deep chest over narrower hips: a 5-sided lathe lying along Z with the spine ridge on top.
 	local body = lathe(
 		b,
 		"Body",
-		CFrame.new(0, 1.9, 0.3) * SIDEWAYS,
-		{ { -0.62, 0.82, 0.76 }, { 0.38, 0.88, 0.82, 0.08 } },
-		4,
-		V(0, -1.12, 0.15),
-		V(0, 1.02, 0.4),
+		CFrame.new(0, 1.95, 0.3) * SIDEWAYS,
+		{ { -0.62, 0.74, 0.68, 0.06 }, { 0.36, 0.88, 0.86 } },
+		5,
+		V(0, -1.12, 0.16),
+		V(0, 1.0, 0.3),
 		"Body",
 		THIN
 	)
 	b:SetCore(body)
 	for _, side in { -1, 1 } do
-		for index, z in { -0.12, 0.3, 0.72, 1.1 } do
+		for index, z in { -0.1, 0.3, 0.7, 1.08 } do
 			stripe(b, "Stripe" .. index .. side, body, V(side * 3, 4.2, z), V(-side, -0.7, 0), V(0, -1, 0.25), 0.7, 0.16, "Black")
 		end
 	end
-	-- Neck rising from the chest into the head (hidden by the mane).
-	b:Spike("Neck", V(0, 2.1, -0.45), V(0, 3.4, -1.05), 1.0, 0.86, "Body", THIN, FRONT)
 	-- Tall sturdy legs narrowing to paws, cream feathering at the back.
 	for index, z in { -0.42, 0.98 } do
 		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(0.46, 1.75, z), { Phase = if index == 1 then 0 else 0.5 }, function()
-			column(b, "Leg", { V(0.46, 2.05, z), V(0.49, 0.06, z - 0.08) }, { 0.38, 0.22 }, { "Body" }, 1.75)
-			prong(b, "Feather", V(0.48, 1.25, z + 0.14), V(0.52, 0.5, z + 0.48), 0.4, 0.22, FRONT, "Belly")
+			column(b, "Leg", { V(0.47, 2.05, z), V(0.5, 0.06, z - 0.08) }, { 0.4, 0.23 }, { "Body" }, 1.75)
+			prong(b, "Feather", V(0.49, 1.3, z + 0.14), V(0.54, 0.5, z + 0.5), 0.42, 0.24, FRONT, "Belly")
 		end)
 	end
-	-- Huge cream mane around the neck, longest on the chest, locks hanging down the chest and over the shoulders.
-	ruff(b, "Mane", V(0, 3.15, -0.75), V(0, 2.62, -0.62), 0.58, 6, V2(0.66, 0.36), V2(0.8, 0.22), "Belly", 0.5)
-	for index, x in { -0.32, 0, 0.32 } do
-		local base = V(x * 0.8, 2.6, -1.0 + math.abs(x) * 0.25)
-		prong(b, "Chest" .. index, base, base + V(x * 0.4, -1.0, -0.14), 0.6, 0.45, BACK, "Belly")
+	-- Huge cream mane around the neck, longest on the chest, locks hanging down the chest.
+	ruff(b, "Mane", V(0, 3.2, -0.75), V(0, 2.62, -0.6), 0.6, 6, V2(0.78, 0.42), V2(0.86, 0.26), "Belly", 0.5)
+	for index, x in { -0.34, 0, 0.34 } do
+		local base = V(x * 0.8, 2.6, -1.05 + math.abs(x) * 0.25)
+		prong(b, "Chest" .. index, base, base + V(x * 0.45, -1.1, -0.16), 0.64, 0.46, BACK, "Belly")
 	end
 
-	-- Big bushy cream tail held up behind: two plumes side by side.
-	b:Bone("Tail", V(0, 2.3, 1.32), nil, function()
-		plume(b, "Tail", V(0, 2.15, 1.2), V(0.05, 3.0, 1.85), V(0, 3.62, 1.5), 0.62, "Belly", "Belly", BACK)
-		plume(b, "Tail2", V(0, 2.2, 1.3), V(-0.18, 2.7, 2.0), V(-0.25, 3.05, 2.05), 0.38, "Belly", "Belly", SIDE)
+	-- Big bushy cream tail held high behind, curling forwards at the tip (16 facets).
+	b:Bone("Tail", V(0, 2.25, 1.32), nil, function()
+		local base, tip = V(0, 2.05, 1.25), V(0, 4.0, 1.95)
+		lathe(
+			b,
+			"Tail",
+			axisFrame(base, tip, BACK),
+			{ { 0.62, 0.48, 0.42 }, { 1.4, 0.5, 0.46, -0.06 } },
+			4,
+			V(0, 0, 0),
+			V(0, 2.08, -0.36),
+			"Belly",
+			THIN,
+			0.5
+		)
 	end)
 
 	b:Bone("Head", V(0, 3.0, -0.95), nil, function()
@@ -620,10 +708,11 @@ Designs["Blazehound"] = function(b)
 		b:Eyes(head, 0.36, 0.14, V(0.36, 0.4, 0.28), DOG_EYE, "Angry")
 		faceTri(b, "Nose", head, 0, -0.2, 0.22, 0.14, "Black", 0.05)
 		b:Mouth(head, -0.44, 0.28)
-		-- Long cream forelock swept back over the head, and fluffy cream cheeks.
-		prong(b, "Crest", V(0, 3.95, -1.6), V(0, 4.6, -0.35), 0.72, 0.5, DOWN, "Belly")
+		-- Long cream forelock swept back over the head, a lock down the back of the head, fluffy cream cheeks.
+		prong(b, "Crest", V(0, 3.98, -1.62), V(0, 4.62, 0.05), 0.86, 0.5, DOWN, "Belly")
+		prong(b, "Nape", V(0, 4.1, -0.95), V(0, 3.05, 0.1), 0.9, 0.45, FRONT, "Belly")
 		for _, side in { -1, 1 } do
-			prong(b, "Cheek" .. side, V(side * 0.55, 3.35, -1.15), V(side * 1.12, 3.1, -0.85), 0.46, 0.32, BACK, "Belly")
+			prong(b, "Cheek" .. side, V(side * 0.55, 3.35, -1.15), V(side * 1.15, 3.08, -0.82), 0.48, 0.32, BACK, "Belly")
 		end
 		b:MirrorBone("Ear", V(0.45, 3.95, -1.05), nil, function()
 			local base, tip = V(0.44, 3.88, -1.02), V(0.88, 4.7, -0.85)
@@ -719,7 +808,9 @@ Designs["Pupjack"] = function(b)
 		tetraFoot(b, "Foot", V(0.32, 0.12, -0.12), V(0.42, 0.24, 0.64), "Accent")
 	end)
 	b:MirrorBone("Arm", V(0.44, 1.5, 0.02), { Phase = 0.5 }, function()
-		b:Limb("Arm", V(0.36, 1.58, 0.02), V(0.74, 0.92, -0.2), 0.38, "Body", { RingAt = 0.66, Thickness = 0.06 })
+		b:Limb("Arm", V(0.36, 1.58, 0.02), V(0.74, 0.98, -0.2), 0.38, "Body", { RingAt = 0.6, Thickness = 0.06 })
+		-- Black forepaw (a light pyramid).
+		prong(b, "Paw", V(0.7, 1.12, -0.18), V(0.78, 0.82, -0.3), 0.34, 0.28, BACK, "Accent")
 	end)
 	b:Bone("Tail", V(0, 0.95, 0.4), nil, function()
 		prong(b, "Tail", V(0, 1.0, 0.3), V(0, 0.72, 1.0), 0.42, 0.3, UP, "Body")
@@ -745,11 +836,11 @@ Designs["Aurajack"] = function(b)
 	})
 	b:SetCore(body)
 	b:Particles(body, Color3.fromRGB(80, 160, 255), 5, 0.35)
-	-- Shaggy cream chest fur sticking out at the sides, and the white chest spike.
+	-- Shaggy cream chest fur ending in two tufts at the waist, and the white chest spike.
 	for _, side in { -1, 1 } do
-		prong(b, "Fur" .. side, V(side * 0.32, 2.6, -0.28), V(side * 0.78, 2.12, -0.42), 0.5, 0.3, BACK, "Belly")
+		prong(b, "Fur" .. side, V(side * 0.34, 2.46, -0.3), V(side * 0.5, 1.86, -0.36), 0.42, 0.24, BACK, "Belly")
 	end
-	prong(b, "ChestSpike", V(0, 2.66, -0.32), V(0, 2.5, -0.92), 0.36, 0.3, DOWN, "White")
+	prong(b, "ChestSpike", V(0, 2.66, -0.32), V(0, 2.54, -0.74), 0.34, 0.28, DOWN, "White")
 
 	b:MirrorBone("Leg", V(0.3, 1.65, 0.05), nil, function()
 		column(b, "Leg", { V(0.28, 1.8, 0.05), V(0.36, 0.95, -0.02), V(0.38, 0.06, -0.06) }, { 0.3, 0.24, 0.16 }, { "Body", "Accent" }, 1.9)
@@ -768,121 +859,142 @@ Designs["Aurajack"] = function(b)
 		jackalHead(b, V(0, 3.52, -0.05), 0.92, V(0.7, 4.8, 0.15), "Angry")
 		-- Four black aura locks hanging from the back of the head.
 		b:MirrorBone("EarLock", V(0.22, 3.55, 0.4), { Amp = 0.6 }, function()
-			prong(b, "LockA", V(0.2, 3.62, 0.28), V(0.4, 2.7, 0.75), 0.26, 0.12, BACK, "Accent")
-			feather(b, "LockB", V(0.3, 3.42, 0.22), V(0.56, 2.6, 0.5), 0.24, SIDE, "Accent")
+			prong(b, "LockA", V(0.18, 3.64, 0.26), V(0.36, 2.66, 0.78), 0.36, 0.16, BACK, "Accent")
+			feather(b, "LockB", V(0.3, 3.44, 0.2), V(0.58, 2.56, 0.52), 0.32, SIDE, "Accent")
 		end)
 	end)
 end
 
 -- Glutton line -------------------------------------------------------------------------------------
 
--- Painter for the faces of the glutton line: cream on the lower front facets.
-local function facePaint(normal: Vector3, offset: Vector3): any
-	return if normal.Z < -0.3 and offset.Y < 0.15 then "Belly" else nil
+-- Painter for the heads of the glutton line: a cream face on the front facets below `hairline`, dark fur above.
+local function gluttonFace(hairline: number)
+	return function(c: Vector3, n: Vector3): any
+		return if n.Z < -0.35 and c.Y < hairline then "Belly" else "Body"
+	end
+end
+
+-- Fringe of dark fur over the face: flat triangles pointing down at the given (x, length) stations, their tops at
+-- height y on the head.
+local function fringe(b, head, y: number, stations: { { number } }, width: number)
+	for index, station in stations do
+		local x, length = station[1], station[2]
+		faceTri(b, "Fringe" .. index, head, x, y - length / 2, width, length, "Body", 0.03)
+	end
 end
 
 --[[
-	Round foot pointing forwards (-Z): a 5-sided ring around `center` (a flat edge at the bottom) with a short blunt
-	point in front (the sole) and a longer one at the back, hidden in the body. size = (width, height, length).
-	10 facets (~20 parts). With `padColor`, a pad lies on the sole: a smaller copy of its 5 front facets, lifted off
-	them (5 facets, ~10 parts).
+	Big round foot (an octahedron, 16 parts) whose top vertex is pulled up to `ankle` (unit offset from its centre,
+	|y| > 1) inside the body: the upper facets narrow into the belly like a short leg, so no gap opens when it steps.
 ]]
-local function footPad(b, name: string, center: Vector3, size: Vector3, color: any, padColor: any?)
-	local rx, ry = size.X / 2, size.Y / 2 / 0.81
-	local front, back = center - V(0, 0, size.Z * 0.38), center + V(0, 0, size.Z * 0.62)
-	local ring = {}
-	for k = 0, 4 do
-		local a = (k + 0.5) * TAU / 5
-		ring[k + 1] = center + V(math.sin(a) * rx, -math.cos(a) * ry, 0)
-	end
-	local vertices = table.clone(ring)
-	table.insert(vertices, front)
-	table.insert(vertices, back)
-	local faces = {}
-	for k = 1, 5 do
-		local k1 = k % 5 + 1
-		table.insert(faces, { k, k1, 6 })
-		table.insert(faces, { k1, k, 7 })
-	end
-	local handle = b:Mesh(name, vertices, faces, color, THIN)
-	if padColor then
-		local pad = {}
-		for k = 1, 5 do
-			pad[k] = front + (ring[k] - front) * 0.62 + V(0, 0, -0.035)
-		end
-		table.insert(pad, front + V(0, 0, -0.035))
-		local padFaces = {}
-		for k = 1, 5 do
-			table.insert(padFaces, { k, k % 5 + 1, 6 })
-		end
-		b:Mesh(name .. "Pad", pad, padFaces, padColor, THIN)
-	end
-	return handle
+local function stompFoot(b, name: string, size: Vector3, position: Vector3, ankle: Vector3, color: any)
+	return sculpt(b, name, size, position, nil, color, {
+		Detail = 0,
+		Deform = function(v: Vector3): Vector3
+			return if v.Y > 0.99 then ankle else v
+		end,
+		Mesh = THIN,
+	})
 end
 
--- Little dark glutton: round body with a cream belly, big head with a cream face under a fringe of dark fur,
--- a wide open mouth, small pointed ears, stubby arms and cream feet.
+-- Little dark glutton: a pear-shaped body with a cream belly, a wide head with a cream face under a jagged
+-- fringe of dark fur, a wide open mouth, small pointed ears, stubby arms and cream feet.
 Designs["Munchling"] = function(b)
-	local body = sculpt(b, "Body", V(1.95, 1.62, 1.65), V(0, 0.95, 0.05), nil, "Body", {
-		Paint = function(normal: Vector3)
-			return if normal.Z < -0.45 then "Belly" else nil
+	local body = lathe(
+		b,
+		"Body",
+		CFrame.new(0, 0, 0.05),
+		{ { 0.6, 1.0, 0.9 }, { 1.16, 0.98, 0.86 }, { 1.6, 0.8, 0.72 } },
+		5,
+		V(0, 0.1, 0),
+		V(0, 2.0, 0),
+		function(c: Vector3, n: Vector3)
+			return if n.Z < -0.3 and c.Y < 1.45 then "Belly" else "Body"
 		end,
-	})
+		THIN,
+		0.5
+	)
 	b:SetCore(body)
-	b:MirrorBone("LegFoot", V(0.48, 0.35, -0.1), nil, function()
-		footPad(b, "Foot", V(0.5, 0.2, -0.3), V(0.62, 0.4, 0.86), "Belly")
+	-- Short shuffling steps: the feet turn a little around their heel, under the belly.
+	b:MirrorBone("LegFoot", V(0.44, 0.36, -0.05), { Amp = 0.5 }, function()
+		stompFoot(b, "Foot", V(0.62, 0.38, 0.86), V(0.44, 0.19, -0.32), V(0, 2.8, 0.5), "Belly")
 	end)
-	b:MirrorBone("Arm", V(0.8, 1.28, -0.1), { Phase = 0.5 }, function()
-		b:Limb("Arm", V(0.66, 1.36, -0.05), V(1.1, 0.88, -0.35), 0.42, "Body", { RingAt = 0.6, Thickness = 0.06 })
+	b:MirrorBone("Arm", V(0.8, 1.38, -0.05), { Phase = 0.5 }, function()
+		b:Limb("Arm", V(0.68, 1.46, -0.02), V(1.16, 0.86, -0.32), 0.44, "Body", { RingAt = 0.55, Sides = 4, Thickness = 0.06 })
 	end)
-	b:Bone("Head", V(0, 1.72, -0.05), nil, function()
-		local head = sculpt(b, "Head", V(1.8, 1.45, 1.5), V(0, 2.25, -0.1), nil, "Body", { Deform = domed(0.85), Paint = facePaint })
-		for index, x in { -0.42, -0.14, 0.14, 0.42 } do
-			faceTri(b, "Bang" .. index, head, x, 0.2, 0.34, 0.34, "Body", 0.04)
-		end
-		b:Eyes(head, 0.33, -0.02, V(0.22, 0.24, 0.22), "Black")
-		b:Mouth(head, -0.32, 0.42, true)
-		b:MirrorBone("Ear", V(0.5, 2.8, -0.05), nil, function()
-			b:Spike("Ear", V(0.48, 2.72, -0.05), V(0.72, 3.25, 0.0), 0.42, 0.32, "Body", THIN, BACK)
+	b:Bone("Head", V(0, 1.75, -0.05), nil, function()
+		local head = lathe(
+			b,
+			"Head",
+			CFrame.new(0, 2.2, -0.1),
+			{ { -0.22, 1.02, 0.8 }, { 0.24, 0.94, 0.74 } },
+			6,
+			V(0, -0.6, 0.1),
+			V(0, 0.62, 0.05),
+			gluttonFace(2.5),
+			THIN
+		)
+		fringe(b, head, 0.25, { { -0.52, 0.28 }, { 0, 0.36 }, { 0.52, 0.28 } }, 0.36)
+		b:Eyes(head, 0.32, -0.06, V(0.2, 0.26, 0.2), "Black")
+		b:Mouth(head, -0.34, 0.46, true)
+		b:MirrorBone("Ear", V(0.5, 2.75, -0.05), nil, function()
+			b:Spike("Ear", V(0.46, 2.52, -0.05), V(0.76, 3.2, 0.0), 0.44, 0.32, "Body", THIN, BACK)
 		end)
 	end)
 end
 
--- Huge sleepy glutton: an enormous round body with a cream belly, a wide head with a cream face, closed eyes and two
--- little fangs, small pointed ears, thick arms with white claws, big cream feet with tan pads, and Zs floating up.
+-- Huge sleepy glutton: an enormous pear-shaped body with a cream belly, a wide head sunk into the shoulders with a
+-- cream face under a jagged fringe, closed eyes and two little fangs, small pointed ears, thick arms with white
+-- claws, big cream feet with white claws, and Zs floating up.
 Designs["Snoozor"] = function(b)
-	local body = sculpt(b, "Body", V(3.05, 2.7, 2.5), V(0, 1.45, 0.1), nil, "Body", {
-		Paint = function(normal: Vector3, offset: Vector3)
-			return if normal.Z < -0.35 and offset.Y < 0.75 then "Belly" else nil
+	local body = lathe(
+		b,
+		"Body",
+		CFrame.new(0, 0, 0.05),
+		{ { 0.95, 1.6, 1.32 }, { 1.95, 1.5, 1.24 }, { 2.8, 1.08, 0.92 } },
+		5,
+		V(0, 0.22, 0),
+		V(0, 3.3, 0),
+		function(c: Vector3, n: Vector3)
+			return if n.Z < -0.28 and c.Y < 2.6 then "Belly" else "Body"
 		end,
-	})
+		THIN,
+		0.5
+	)
 	b:SetCore(body)
-	-- Big feet sticking out under the belly, the soles turned to the front: tan pads, three white claws on top.
-	b:MirrorBone("LegFoot", V(0.85, 0.6, -0.55), nil, function()
-		footPad(b, "Foot", V(0.88, 0.62, -0.95), V(1.0, 1.0, 1.0), "Belly", "Extra")
-		claws(b, "Claw", V(0.88, 1.02, -1.15), V(0, 1, -0.45), SIDE, 3, 0.25, 0.3)
+	-- Short legs: big cream feet, the toes forwards with three white claws.
+	b:MirrorBone("LegFoot", V(0.9, 0.62, -0.3), { Amp = 0.45 }, function()
+		stompFoot(b, "Foot", V(1.08, 0.7, 1.4), V(0.9, 0.35, -0.76), V(0, 2.4, 0.45), "Belly")
+		claws(b, "Claw", V(0.9, 0.4, -1.22), V(0, 1, -0.6), SIDE, 3, 0.26, 0.3)
 	end)
-	b:MirrorBone("Arm", V(1.25, 2.1, -0.1), { Phase = 0.5 }, function()
-		b:Limb("Arm", V(1.12, 2.22, -0.05), V(1.72, 1.32, -0.45), 0.75, "Body", { RingAt = 0.5, Thickness = 0.08 })
-		claws(b, "Claw", V(1.74, 1.3, -0.52), V(0.3, -1, -0.4), BACK, 3, 0.16, 0.26)
+	b:MirrorBone("Arm", V(1.25, 2.4, -0.1), { Phase = 0.5 }, function()
+		b:Limb("Arm", V(1.08, 2.55, -0.05), V(1.86, 1.42, -0.5), 0.82, "Body", { RingAt = 0.5, Sides = 4, Thickness = 0.08 })
+		claws(b, "Claw", V(1.88, 1.42, -0.58), V(0.25, -1, -0.45), SIDE, 3, 0.17, 0.28)
 	end)
-	b:Bone("Head", V(0, 2.6, -0.1), nil, function()
-		local head = sculpt(b, "Head", V(2.25, 1.4, 1.75), V(0, 3.08, -0.18), nil, "Body", { Deform = domed(0.75), Paint = facePaint })
-		for index, x in { -0.5, -0.17, 0.17, 0.5 } do
-			faceTri(b, "Bang" .. index, head, x, 0.2, 0.38, 0.3, "Body", 0.04)
-		end
-		b:Eyes(head, 0.38, 0.0, V(0.4, 0.3, 0.2), "Black", "Sleepy")
-		b:Mouth(head, -0.32, 0.6)
+	b:Bone("Head", V(0, 2.9, -0.1), { Amp = 0.7 }, function()
+		local head = lathe(
+			b,
+			"Head",
+			CFrame.new(0, 3.3, -0.24),
+			{ { -0.26, 1.32, 1.0 }, { 0.22, 1.18, 0.9 } },
+			6,
+			V(0, -0.62, 0.15),
+			V(0, 0.52, 0.1),
+			gluttonFace(3.48),
+			THIN
+		)
+		fringe(b, head, 0.22, { { -0.5, 0.2 }, { 0, 0.26 }, { 0.5, 0.2 } }, 0.42)
+		b:Eyes(head, 0.46, -0.04, V(0.46, 0.3, 0.2), "Black", "Sleepy")
+		b:Mouth(head, -0.32, 0.72)
 		for _, side in { -1, 1 } do
-			faceTri(b, "Fang" .. side, head, side * 0.17, -0.25, 0.12, -0.14, "White", 0.08)
+			faceTri(b, "Fang" .. side, head, side * 0.22, -0.27, 0.14, -0.16, "White", 0.08)
 		end
-		b:MirrorBone("Ear", V(0.68, 3.6, -0.1), nil, function()
-			b:Spike("Ear", V(0.66, 3.52, -0.1), V(0.98, 4.08, -0.05), 0.5, 0.34, "Body", THIN, BACK)
+		b:MirrorBone("Ear", V(0.72, 3.78, -0.15), nil, function()
+			b:Spike("Ear", V(0.7, 3.7, -0.15), V(1.0, 4.24, -0.1), 0.54, 0.36, "Body", THIN, BACK)
 		end)
-		-- Zs floating up from the sleeping head.
-		b:Bone("FloatZ", V(1.0, 4.4, -0.3), { Role = "Float" }, function()
-			zLetter(b, "ZBig", V(1.05, 4.45, -0.3), 0.5, SLEEP, { Neon = true, Thickness = 0.06 })
-			zLetter(b, "ZSmall", V(1.55, 4.95, -0.3), 0.32, SLEEP, { Neon = true, Thickness = 0.05 })
+		-- A Z floating up from the sleeping head.
+		b:Bone("FloatZ", V(1.3, 4.8, -0.3), { Role = "Float" }, function()
+			zLetter(b, "Z", V(1.3, 4.8, -0.3), 0.6, SLEEP, { Neon = true, Thickness = 0.06 })
 		end)
 	end)
 end
@@ -911,8 +1023,8 @@ Designs["Psyclone"] = function(b)
 
 	-- Digitigrade legs: strong thigh forwards, slim shin back to a small pointed foot (they dangle while it hovers).
 	b:MirrorBone("Leg", V(0.34, 1.8, 0.05), nil, function()
-		b:Limb("Thigh", V(0.28, 2.0, 0.05), V(0.44, 1.02, -0.1), 0.7, "Body", { RingAt = 0.38, Thickness = 0.08 })
-		b:Limb("Shin", V(0.44, 1.14, -0.12), V(0.46, 0.3, 0.16), 0.34, "Body", { RingAt = 0.3, Thickness = 0.06 })
+		b:Limb("Thigh", V(0.28, 2.05, 0.05), V(0.44, 1.0, -0.1), 0.88, "Body", { RingAt = 0.4, Thickness = 0.08 })
+		b:Limb("Shin", V(0.44, 1.18, -0.12), V(0.46, 0.3, 0.16), 0.32, "Body", { RingAt = 0.25, Thickness = 0.06 })
 		tetraFoot(b, "Foot", V(0.46, 0.16, 0.0), V(0.36, 0.32, 0.64), "Body")
 	end)
 	-- Long arms reaching forwards around the orb, three flat fingers on a small palm.
@@ -926,14 +1038,14 @@ Designs["Psyclone"] = function(b)
 	end)
 
 	-- Long thick purple tail: down from the hips, along behind and curling up at the tip.
-	local rings = tubeRings({ V(0, 1.72, 0.3), V(0, 1.15, 0.95), V(0.05, 0.95, 1.6), V(0.15, 1.35, 2.1), V(0.2, 2.05, 2.2) }, { 0.36, 0.32, 0.25, 0.16, 0 }, 3, UP)
-	b:Bone("Tail", V(0, 1.72, 0.38), { Amp = 0.6 }, function()
+	local points = { V(0, 1.72, 0.3), V(0, 1.02, 1.08), V(0.06, 0.98, 1.95), V(0.14, 1.5, 2.4) }
+	local rings = tubeRings(points, { 0.4, 0.27, 0.18, 0 }, 4, UP)
+	b:Bone("Tail", points[1] + V(0, 0, 0.08), { Amp = 0.6 }, function()
 		tubeSegment(b, "Tail1", rings, 1, "Accent")
-		b:Bone("Tail2", V(0, 1.15, 0.95), { Phase = 0.15 }, function()
+		b:Bone("Tail2", points[2], { Phase = 0.15 }, function()
 			tubeSegment(b, "Tail2", rings, 2, "Accent", nil, 0.12)
-			b:Bone("Tail3", V(0.05, 0.95, 1.6), { Phase = 0.3 }, function()
+			b:Bone("Tail3", points[3], { Phase = 0.3 }, function()
 				tubeSegment(b, "Tail3", rings, 3, "Accent", nil, 0.1)
-				tubeSegment(b, "Tail4", rings, 4, "Accent")
 			end)
 		end)
 	end)
@@ -945,9 +1057,9 @@ Designs["Psyclone"] = function(b)
 	end)
 
 	b:Bone("Head", V(0, 3.15, 0.0), nil, function()
-		local head = sculpt(b, "Head", V(0.84, 0.76, 0.94), V(0, 3.44, -0.1), nil, "Body", { Detail = 1, Deform = snout(0.25, 0.8, 0.02) })
-		b:Eyes(head, 0.2, 0.06, V(0.22, 0.2, 0.2), PSY_EYE, "Angry")
-		b:MirrorSpike("Horn", V(0.2, 3.64, 0.0), V(0.36, 4.12, 0.2), 0.24, 0.22, "Body", THIN, BACK)
+		local head = sculpt(b, "Head", V(0.96, 0.84, 1.0), V(0, 3.48, -0.1), nil, "Body", { Deform = domed(0.92, snout(0.26, 0.74, 0.02)) })
+		b:Eyes(head, 0.22, 0.06, V(0.24, 0.22, 0.2), PSY_EYE, "Angry")
+		b:MirrorSpike("Horn", V(0.2, 3.6, 0.0), V(0.33, 3.94, 0.14), 0.32, 0.26, "Body", THIN, BACK)
 		-- Tube from the back of the skull down to the upper back.
 		b:Limb("Tube", V(0, 3.56, 0.2), V(0, 2.92, 0.5), 0.26, "Body", { RingAt = 0.4, Thickness = 0.06 })
 	end)
@@ -957,11 +1069,15 @@ end
 -- arms, dangling hind legs with big feet, and a very long thin tail rising behind it in an S to an oval tip.
 Designs["Pinkling"] = function(b)
 	b.Hover = 1.6
-	local body = sculpt(b, "Body", V(0.86, 1.05, 0.8), V(0, 1.25, 0.08), V(-12, 0, 0), "Body", { Detail = 1 })
+	local body = sculpt(b, "Body", V(0.9, 1.1, 0.82), V(0, 1.25, 0.08), V(-12, 0, 0), "Body", {
+		Deform = function(v: Vector3): Vector3
+			return V(v.X * (1 - v.Y * 0.1), v.Y, v.Z)
+		end,
+	})
 	b:SetCore(body)
 	b:Particles(body, Color3.fromRGB(255, 190, 230), 3, 0.2)
 	b:MirrorBone("Leg", V(0.24, 1.0, 0.1), nil, function()
-		b:Limb("Leg", V(0.22, 1.05, 0.1), V(0.34, 0.45, 0.0), 0.32, "Body", { RingAt = 0.3, Thickness = 0.06 })
+		b:Limb("Leg", V(0.22, 1.08, 0.1), V(0.34, 0.45, 0.0), 0.4, "Body", { RingAt = 0.3, Thickness = 0.06 })
 		b:Limb("Foot", V(0.36, 0.48, 0.14), V(0.38, 0.3, -0.42), 0.34, "Body", { RingAt = 0.42, Thickness = 0.06 })
 	end)
 	b:MirrorBone("Arm", V(0.3, 1.55, -0.12), { Phase = 0.5 }, function()

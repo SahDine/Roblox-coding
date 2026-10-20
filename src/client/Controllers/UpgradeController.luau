@@ -159,6 +159,7 @@ function UpgradeController.Start()
 		UIKit.Label({ Text = "", Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3), ZIndex = 2, Parent = bar })
 
 	local busy = false
+	local lastSent = 0
 	local refresh: () -> ()
 
 	local button = UIKit.Button({
@@ -173,6 +174,18 @@ function UpgradeController.Start()
 			return
 		end
 		busy = true
+		-- The server refuses requests closer than UPGRADE.Cooldown ("Slow down!"): a quick click right
+		-- after an upgrade waits for the end of the cooldown instead (buying several levels in a row).
+		local remaining = UPGRADE.Cooldown + 0.1 - (os.clock() - lastSent)
+		if remaining > 0 then
+			task.wait(remaining)
+		end
+		if getLevel() >= UPGRADE.MaxLevel then
+			busy = false
+			refresh()
+			return
+		end
+		lastSent = os.clock()
 		local ok, success, message = pcall(function()
 			return Remotes.UpgradeBase:InvokeServer(getLevel())
 		end)

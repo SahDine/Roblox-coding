@@ -245,6 +245,7 @@ end
 -- calm turquoise water with small waves.
 local function paintTerrain(terrain: Terrain)
 	terrain:SetMaterialColor(Enum.Material.Grass, Color3.fromRGB(114, 178, 86))
+	terrain:SetMaterialColor(Enum.Material.LeafyGrass, Color3.fromRGB(92, 152, 80))
 	terrain:SetMaterialColor(Enum.Material.Cobblestone, Color3.fromRGB(170, 162, 182))
 	terrain:SetMaterialColor(Enum.Material.Ground, Color3.fromRGB(170, 128, 92))
 	terrain:SetMaterialColor(Enum.Material.Pavement, Color3.fromRGB(190, 180, 206))
@@ -257,6 +258,19 @@ local function paintTerrain(terrain: Terrain)
 	terrain.WaterWaveSpeed = 6
 end
 
+-- Dirt trail through `points` (terrain only, top at y = 0): overlapping discs every 2 studs. Terrain
+-- voxels are 4 studs wide, so a trail narrower than ~5 studs would break up.
+local function trail(terrain: Terrain, points: { Vector3 }, radius: number)
+	for index = 1, #points - 1 do
+		local a, b = points[index], points[index + 1]
+		local steps = math.max(1, math.ceil((b - a).Magnitude / 2))
+		for step = 0, steps do
+			local p = a:Lerp(b, step / steps)
+			terrain:FillCylinder(CFrame.new(p.X, -2, p.Z), 4, radius, Enum.Material.Ground)
+		end
+	end
+end
+
 local function buildTerrain()
 	local terrain = workspace.Terrain
 	local halfW, halfD = MapService.HalfWidth, MapService.HalfDepth
@@ -264,6 +278,16 @@ local function buildTerrain()
 
 	-- Meadow (top surface exactly at y = 0), wide enough to reach the mountains.
 	terrain:FillBlock(CFrame.new(0, -6, 0), Vector3.new(halfW * 2 + 380, 12, halfD * 2 + 380), Enum.Material.Grass)
+
+	-- Darker leafy ground under the forest behind the bases (it stops 2 studs before their margin).
+	local floorRng = Decor.Rng(5)
+	for x = -halfW - 10, halfW + 10, 22 do
+		for _, side in { -1, 1 } do
+			local radius = floorRng:NextNumber(13, 18)
+			local z = side * (PLOT_BACK + BASE_MARGIN + 2 + radius + floorRng:NextNumber(0, 6))
+			terrain:FillCylinder(CFrame.new(x + floorRng:NextNumber(-6, 6), -2, z), 4, radius, Enum.Material.LeafyGrass)
+		end
+	end
 
 	-- Cobblestone plaza along the conveyor.
 	terrain:FillBlock(CFrame.new(0, -2, 0), Vector3.new(MAP.ConveyorLength + 40, 4, PLAZA_HALF * 2), Enum.Material.Cobblestone)
@@ -283,6 +307,33 @@ local function buildTerrain()
 	local courtyard = CFrame.new(MapService.SpawnPosition - Vector3.new(0, 2, 0))
 	terrain:FillCylinder(courtyard, 4, SPAWN_RADIUS + 3, Enum.Material.Cobblestone)
 	terrain:FillCylinder(courtyard, 4, SPAWN_RADIUS, Enum.Material.Pavement)
+
+	-- Trails inviting players to explore: from the east end of the plaza (past the garden fences)
+	-- to the bridge and the stepping stones, then on to the crystal groves; from the spawn
+	-- courtyard (east of the leaderboards) round the north-west pond to the ruins.
+	local east = HALF_CONVEYOR
+	for _, side in { -1, 1 } do
+		trail(terrain, {
+			Vector3.new(east + 21, 0, side * 17),
+			Vector3.new(east + 23, 0, side * 38),
+			Vector3.new(east + 27, 0, side * 58),
+		}, 2.6)
+		trail(terrain, {
+			Vector3.new(east + 76, 0, side * 62),
+			Vector3.new(east + 72, 0, side * 90),
+			Vector3.new(east + 56, 0, side * 110),
+		}, 2.4)
+	end
+	local west = -HALF_CONVEYOR
+	trail(terrain, {
+		Vector3.new(west - 26, 0, 26),
+		Vector3.new(west - 21, 0, 50),
+		Vector3.new(west - 22, 0, 92),
+		Vector3.new(west - 34, 0, 112),
+		Vector3.new(west - 44, 0, 121),
+	}, 2.4)
+	-- Worn paving around the ruins.
+	terrain:FillCylinder(CFrame.new(west - 48, -2, 130), 4, 9, Enum.Material.Cobblestone)
 
 	-- Ponds at both ends of the plaza (surface at y = 0) with a pale sandy shore.
 	for _, pond in PONDS do
@@ -406,7 +457,9 @@ local function buildSpawn(folder: Folder)
 	spawn.Name = "MainSpawn"
 	spawn.Anchored = true
 	spawn.Size = Vector3.new(16, 1, 16)
-	spawn.CFrame = CFrame.new(origin + Vector3.new(0, 0.5, 0))
+	-- Characters spawn facing the pad's front: towards the NEW CRITTERS portal and the conveyor.
+	local padCenter = origin + Vector3.new(0, 0.5, 0)
+	spawn.CFrame = CFrame.lookAt(padCenter, padCenter + Vector3.xAxis)
 	spawn.Color = Color3.fromRGB(120, 100, 180)
 	spawn.Material = Enum.Material.Slate
 	spawn.TopSurface = Enum.SurfaceType.Smooth
@@ -540,7 +593,7 @@ local function buildGardens(decor: Folder)
 				end
 				for _, dx in { -1, 1 } do
 					gardenBed(x + dx * 16, side * 23.5, 4)
-					Flora.FlowerPatch(gardens, Vector3.new(x + dx * 16, 0, side * 23.5), 3.2, 7, seed + dx)
+					Flora.FlowerPatch(gardens, Vector3.new(x + dx * 16, 0, side * 23.5), 3, 9, seed + dx)
 				end
 				-- A bush on one side (alternating from one garden to the next).
 				local flip = if (column + (if side > 0 then 1 else 0)) % 2 == 0 then 1 else -1
@@ -754,6 +807,8 @@ local function buildHorizon(decor: Folder)
 			Vector3.new(140, 160, -215),
 			Vector3.new(330, 140, 120),
 			Vector3.new(-340, 150, -130),
+			Vector3.new(40, 172, 245),
+			Vector3.new(-40, 165, -250),
 		}
 	do
 		Horizon.Cloud(sky, cloud, rng:NextNumber(2.2, 2.8), 950 + index)

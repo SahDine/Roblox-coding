@@ -433,8 +433,9 @@ function Flora.Mushroom(parent: Instance, base: Vector3, scale: number, seed: nu
 end
 
 --[[
-	Patch of little flowers (~4 parts each): a leaf blade and three flat pinwheel petals, every
-	triangle right-angled so it costs a single WedgePart.
+	Patch of flowers (~4 parts each): a leaf blade and three flat pinwheel petals, every triangle
+	right-angled so it costs a single WedgePart. Stylised and chunky (knee to waist high) so the
+	beds still read as colour from the player's camera.
 ]]
 function Flora.FlowerPatch(parent: Instance, center: Vector3, radius: number, count: number, seed: number, palette: { Color3 }?): Model
 	local rng = Decor.Rng(seed)
@@ -447,15 +448,15 @@ function Flora.FlowerPatch(parent: Instance, center: Vector3, radius: number, co
 		local angle = rng:NextNumber(0, math.pi * 2)
 		local distance = math.sqrt(rng:NextNumber(0, 1)) * radius
 		local foot = center + Vector3.new(math.cos(angle) * distance, 0, math.sin(angle) * distance)
-		local height = rng:NextNumber(0.9, 1.5)
+		local height = rng:NextNumber(1.3, 2.1)
 		local side = randomFlat(rng)
-		LowPoly.Triangle(foot, foot + side * 0.45, foot + Vector3.new(0, height, 0), leaf, model)
+		LowPoly.Triangle(foot, foot + side * 0.6, foot + Vector3.new(0, height, 0), leaf, model)
 
 		local head = foot + Vector3.new(0, height, 0)
 		local petal = Decor.Facets("Petal", pick(colors, rng))
 		petal.CastShadow = false
 		petal.Thickness = 0.08
-		local size = rng:NextNumber(0.45, 0.65)
+		local size = rng:NextNumber(0.65, 0.9)
 		local turn = rng:NextNumber(0, math.pi * 2)
 		for k = 0, 2 do
 			local a = turn + k * math.pi * 2 / 3
