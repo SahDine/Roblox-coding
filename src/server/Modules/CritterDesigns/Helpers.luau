@@ -19,17 +19,36 @@ end
 function Helpers.bipedLegs(b, hipY: number, spacing: number, thickness: number, color: any, footColor: any?)
 	b:MirrorBone("Leg", V(spacing, hipY, 0.05), nil, function()
 		b:Limb("Leg", V(spacing, hipY, 0.05), V(spacing + 0.05, thickness * 0.5, -0.05), thickness, color)
-		b:Ball("Foot", V(thickness * 1.15, thickness * 0.6, thickness * 1.55), V(spacing + 0.05, thickness * 0.3, -0.25), nil, footColor or color, { Detail = 0 })
+		b:Ball(
+			"Foot",
+			V(thickness * 1.15, thickness * 0.6, thickness * 1.55),
+			V(spacing + 0.05, thickness * 0.3, -0.25),
+			nil,
+			footColor or color,
+			{ Detail = 0 }
+		)
 	end)
 end
 
 -- Four legs (front at frontZ, back at backZ) with paws. Diagonal pairs move together (trot).
 function Helpers.quadLegs(b, frontZ: number, backZ: number, spacing: number, topY: number, thickness: number, color: any, pawColor: any?)
 	for index, z in { frontZ, backZ } do
-		b:MirrorBone(if index == 1 then "LegFront" else "LegBack", V(spacing, topY, z), { Phase = if index == 1 then 0 else 0.5 }, function()
-			b:Limb("Leg", V(spacing, topY, z), V(spacing, thickness * 0.45, z - 0.05), thickness, color)
-			b:Ball("Paw", V(thickness * 1.2, thickness * 0.55, thickness * 1.4), V(spacing, thickness * 0.27, z - 0.12), nil, pawColor or color, { Detail = 0 })
-		end)
+		b:MirrorBone(
+			if index == 1 then "LegFront" else "LegBack",
+			V(spacing, topY, z),
+			{ Phase = if index == 1 then 0 else 0.5 },
+			function()
+				b:Limb("Leg", V(spacing, topY, z), V(spacing, thickness * 0.45, z - 0.05), thickness, color)
+				b:Ball(
+					"Paw",
+					V(thickness * 1.2, thickness * 0.55, thickness * 1.4),
+					V(spacing, thickness * 0.27, z - 0.12),
+					nil,
+					pawColor or color,
+					{ Detail = 0 }
+				)
+			end
+		)
 	end
 end
 

@@ -186,7 +186,7 @@ GameConfig.Daily = {
 GameConfig.Leaderboard = {
 	RefreshInterval = 120,
 	FirstRefreshDelay = 15, -- seconds after the server start (lets the first players load)
-	TopCount = 10,
+	TopCount = 10, -- rows per board (the board layout has room for 10, not more)
 	Stores = { Rebirths = "LB_Rebirths_v1", Money = "LB_MoneyEarned_v1" },
 	-- Studio test sessions read the boards but never submit scores (debug cash would pollute them).
 	WriteInStudio = false,

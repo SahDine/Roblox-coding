@@ -387,6 +387,18 @@ local function giveSlapTool(player: Player)
 	end
 end
 
+-- Swaps the glove (held or in the backpack) when it no longer matches the MegaSlap pass: pass
+-- bought, or the ownership check finished after the glove was given (slow web call). No glove yet:
+-- the next CharacterAdded gives the right one.
+local function refreshGlove(player: Player)
+	local backpack = player:FindFirstChildOfClass("Backpack")
+	local character = player.Character
+	local glove = (backpack and backpack:FindFirstChild("Slap")) or (character and character:FindFirstChild("Slap"))
+	if glove and glove:GetAttribute("Mega") ~= MonetizationService.OwnsPass(player, "MegaSlap") then
+		giveSlapTool(player)
+	end
+end
+
 local function onCharacterAdded(player: Player, character: Model)
 	setCollisionGroup(character)
 	local humanoid = character:WaitForChild("Humanoid", 10) :: Humanoid?
@@ -405,6 +417,10 @@ function CombatService.OnPlayerLoaded(player: Player)
 	player.CharacterAdded:Connect(function(character)
 		onCharacterAdded(player, character)
 	end)
+	-- Set by MonetizationService when the pass check ends, which can be after the glove was given.
+	player:GetAttributeChangedSignal("Pass_MegaSlap"):Connect(function()
+		refreshGlove(player)
+	end)
 	if player.Character then
 		task.spawn(onCharacterAdded, player, player.Character)
 	end
@@ -417,7 +433,7 @@ end
 function CombatService.Start()
 	MonetizationService.PassGranted:Connect(function(player, passKey)
 		if passKey == "MegaSlap" then
-			giveSlapTool(player)
+			refreshGlove(player) -- no-op if the attribute change already swapped it
 		end
 	end)
 end

@@ -166,10 +166,15 @@ function Horizon.Cloud(parent: Instance, center: Vector3, scale: number, seed: n
 	return model
 end
 
+-- Where a waterfall lands: the height of the water surface, or a function giving the height of the
+-- ground at (x, z) for a waterfall landing on a slope.
+export type Landing = number | (x: number, z: number) -> number
+
 --[[
 	Floating island centred on `center` (its grass top): a grass fan, an earth band and a long rock
 	spike underneath, with a tree and crystals on top and a waterfall pouring off the rim down to
-	`fallTo` (the world height of the water or ground below; the water lands in foam and mist there).
+	`fallTo` (the water or ground below; the water lands in foam and mist there, and on a hillside
+	the foam and the foot of the falling sheet follow the slope instead of floating over it).
 	fallSide: horizontal direction of the waterfall. crystalColor (optional): adds a glowing crystal
 	cluster next to the tree. viewBox (optional): where the island is seen from; the facets of its
 	body turned away from it are skipped.
@@ -180,7 +185,7 @@ function Horizon.FloatingIsland(
 	scale: number,
 	seed: number,
 	fallSide: Vector3,
-	fallTo: number,
+	fallTo: Landing,
 	crystalColor: Color3?,
 	viewBox: ViewBox?
 ): Model
@@ -249,16 +254,26 @@ function Horizon.FloatingIsland(
 	local sourceHalf = width * 0.35
 	LowPoly.Triangle(source + across * sourceHalf, source - across * sourceHalf, lip + across * width / 2, water, model)
 	LowPoly.Triangle(source - across * sourceHalf, lip - across * width / 2, lip + across * width / 2, water, model)
-	local bottom = Vector3.new(lip.X, fallTo, lip.Z) + fallSide * 2 * s
+	-- `point` moved onto the water or the ground below it, `lift` studs above it.
+	local function onGround(point: Vector3, lift: number): Vector3
+		local y = if type(fallTo) == "number" then fallTo else fallTo(point.X, point.Z)
+		return Vector3.new(point.X, y + lift, point.Z)
+	end
+	local bottom = onGround(lip + fallSide * 2 * s, 0)
 	local function sheet(t: number): (Vector3, number)
 		return lip:Lerp(bottom, t), width / 2 * (1 + t)
 	end
 	for band = 1, 3 do
 		local high, highHalf = sheet((band - 1) / 3)
 		local low, lowHalf = sheet(band / 3)
+		local lowLeft, lowRight = low + across * lowHalf, low - across * lowHalf
+		if band == 3 then
+			-- The lower corners reach the ground on both sides of the foot (it may slope).
+			lowLeft, lowRight = onGround(lowLeft, 0), onGround(lowRight, 0)
+		end
 		water.Transparency = 0.15 + band * 0.12
-		LowPoly.Triangle(high + across * highHalf, high - across * highHalf, low + across * lowHalf, water, model)
-		LowPoly.Triangle(high - across * highHalf, low - across * lowHalf, low + across * lowHalf, water, model)
+		LowPoly.Triangle(high + across * highHalf, high - across * highHalf, lowLeft, water, model)
+		LowPoly.Triangle(high - across * highHalf, lowRight, lowLeft, water, model)
 	end
 	-- Pale streaks just in front of the sheet (it leans outwards by 2 studs per unit of scale).
 	local streak = farProps("Waterfall", WATER:Lerp(WHITE, 0.6))
@@ -278,18 +293,21 @@ function Horizon.FloatingIsland(
 		)
 	end
 
-	-- Foam where the water lands: an eight-pointed star of flat right triangles (1 part each).
+	-- Foam where the water lands: an eight-pointed star of right triangles (1 part each) lying on
+	-- the water. On a slope every point of the star sits on the ground (2 parts per triangle), a
+	-- little higher so the hillside does not swallow the middle of the facets.
 	local foam = farProps("Foam", WHITE)
 	foam.Transparency = 0.2
 	foam.Thickness = 0.1
-	local splash = bottom + Vector3.new(0, 0.1, 0)
+	local lift = if type(fallTo) == "number" then 0.1 else 0.35
+	local splash = onGround(bottom, lift)
 	local spread = width * 1.6
 	for k = 0, 7 do
 		local angle = k * math.pi / 4 + rng:NextNumber(-0.15, 0.15)
 		local reach = spread * (if k % 2 == 0 then 1 else 0.65) * rng:NextNumber(0.85, 1.15)
 		local d1 = Vector3.new(math.cos(angle), 0, math.sin(angle))
 		local d2 = Vector3.new(-d1.Z, 0, d1.X)
-		LowPoly.Triangle(splash, splash + d1 * reach, splash + d2 * reach * 0.55, foam, model)
+		LowPoly.Triangle(splash, onGround(splash + d1 * reach, lift), onGround(splash + d2 * reach * 0.55, lift), foam, model)
 	end
 
 	local mist = Decor.Part({

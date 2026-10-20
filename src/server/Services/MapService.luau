@@ -424,20 +424,25 @@ local function buildConveyor(folder: Folder)
 
 	-- Crystal lamps at the edge of the plaza: a pair at the mouth of every dirt path with a pennant
 	-- garland between them, a pair in the middle of the plaza and a pair near both portals.
+	-- The path lamps are taller: everybody walking home goes under their garland, which must clear
+	-- the players' heads and the critters walking to their base (up to ~8 studs tall).
 	local edge = PLAZA_HALF - 1.5
+	local gatePost = 10.5
+	local tie = 0.7 + gatePost - 0.3 -- just under the top of the posts (lamp foot 0.7 high)
+	local sag = 1.2 -- the pennants (1.3 long) hang down to tie - sag - 1.3 = 8.4 in the middle
 	for _, center in baseCenters() do
 		local side = math.sign(center.Z)
 		local lampColor = if side > 0 then GOLD else MAGIC
 		local spread = PATH_HALF + 3
 		for _, dx in { -spread, spread } do
-			Landmarks.PlazaLamp(belt, Vector3.new(center.X + dx, 0, side * edge), lampColor, Vector3.new(0, 0, -side))
+			Landmarks.PlazaLamp(belt, Vector3.new(center.X + dx, 0, side * edge), lampColor, Vector3.new(0, 0, -side), gatePost)
 		end
 		-- The rope is tied to the sides of the two lamp posts (0.4 thick).
 		Landmarks.Garland(
 			belt,
-			Vector3.new(center.X - spread + 0.25, 7.4, side * edge),
-			Vector3.new(center.X + spread - 0.25, 7.4, side * edge),
-			1.6,
+			Vector3.new(center.X - spread + 0.25, tie, side * edge),
+			Vector3.new(center.X + spread - 0.25, tie, side * edge),
+			sag,
 			PENNANTS
 		)
 	end
@@ -608,10 +613,14 @@ local function buildGardens(decor: Folder)
 			else
 				-- Outer gardens next to the portals: a fenced flower meadow and a cherry tree. On the
 				-- spawn side the fence stops before the rare-spawn board and the spawn courtyard.
+				-- A bought critter walks in a straight line from the belt to the foot of its castle's
+				-- ramp (~37 studs from the conveyor): from the ends of the belt to the outer castles it
+				-- crosses z = 19.5 up to |x| = 171, so the fence starts a few studs beyond (big critters).
 				local outward = math.sign(x)
 				local from = HALF_CONVEYOR - 38
+				local fenceFrom = HALF_CONVEYOR - 24
 				local to = if outward > 0 then HALF_CONVEYOR + 18 else HALF_CONVEYOR - 8
-				Landmarks.Fence(gardens, Vector3.new(outward * from, 0, side * 19.5), Vector3.new(outward * to, 0, side * 19.5), seed)
+				Landmarks.Fence(gardens, Vector3.new(outward * fenceFrom, 0, side * 19.5), Vector3.new(outward * to, 0, side * 19.5), seed)
 				Flora.CherryTree(gardens, Vector3.new(outward * (from + 12), 0, side * 26.5), 0.9, seed + 1)
 				Flora.FlowerPatch(gardens, Vector3.new(outward * (from + 26), 0, side * 25), 3.5, 8, seed + 2)
 				if outward > 0 then
@@ -817,7 +826,7 @@ local function buildHorizon(decor: Folder)
 	local northPond, southPond = PONDS[1], PONDS[2]
 	Horizon.FloatingIsland(sky, northPond + Vector3.new(0, 62, 28), 0.9, 970, Vector3.new(0, 0, -1), 0, nil, viewBox)
 	Horizon.FloatingIsland(sky, southPond + Vector3.new(0, 66, -28), 0.9, 971, Vector3.new(0, 0, 1), 0, nil, viewBox)
-	-- The waterfalls of the forest islands land on the hills (the foot is ~16 studs out per unit of scale).
+	-- The waterfalls of the forest islands land on the slopes of the hills (the foam follows them).
 	local halfD = MapService.HalfDepth
 	for index, island in
 		{
@@ -825,8 +834,7 @@ local function buildHorizon(decor: Folder)
 			{ Center = Vector3.new(80, 90, -halfD - 45), Scale = 1.3, Fall = Vector3.new(-0.5, 0, 0.85).Unit },
 		}
 	do
-		local foot = island.Center + island.Fall * 16 * island.Scale
-		Horizon.FloatingIsland(sky, island.Center, island.Scale, 971 + index, island.Fall, groundHeight(foot.X, foot.Z), nil, viewBox)
+		Horizon.FloatingIsland(sky, island.Center, island.Scale, 971 + index, island.Fall, groundHeight, nil, viewBox)
 	end
 end
 

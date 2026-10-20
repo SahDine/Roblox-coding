@@ -832,7 +832,13 @@ function UnitService.OnPlayerLoaded(player: Player, data)
 		local amount = math.floor(UnitService.GetIncomePerSecond(player) * offlineSeconds * economy.OfflineRate)
 		if amount >= 1 then
 			CurrencyService.Add(player, amount)
-			task.delay(3, Notifier.Send, player, `💤 Welcome back! Your critters earned {Format.Money(amount)} while you were away`, "success")
+			task.delay(
+				3,
+				Notifier.Send,
+				player,
+				`💤 Welcome back! Your critters earned {Format.Money(amount)} while you were away`,
+				"success"
+			)
 		end
 	end
 

@@ -37,9 +37,12 @@ local WRITE_REQUEST = Enum.DataStoreRequestType.SetIncrementSortedAsync
 local READ_REQUEST = Enum.DataStoreRequestType.GetSortedAsync
 local LEAVE_WRITE_ATTEMPTS = 4 -- tries (2 s apart) to save the scores of a leaving player
 local OFFLINE_RETRY = 30 -- seconds between two tries while a board has never been read
+local SNAPSHOT_INTERVAL = 10 -- seconds between two snapshots of the live scores (used at shutdown)
 
--- Board geometry. Reserved map zones: x in [-288, -238], z in [18, 44] and z in [-44, -18]
--- (each board's footprint, rotated towards the spawn, stays about 4 studs inside its zone).
+-- Board geometry. Reserved map zones: x in [-288, -238], z in [18, 44] and z in [-44, -18].
+-- The boards stand in the east part of their zone, on both sides of the spawn pad (players spawn
+-- facing east): further west, the spawn banners at (-255, +-15) would hide the middle of each board
+-- from the pad. Each footprint, rotated towards the spawn, stays about 1 stud inside its zone.
 local BOARD_WIDTH = 22
 local BOARD_HEIGHT = 18
 local BOARD_BOTTOM = 3 -- the lowest rows stay visible above the players' heads
@@ -101,7 +104,7 @@ local BOARD_DEFS: { BoardDef } = {
 		Key = "Money",
 		Title = "💰 TOP MONEY 💰",
 		Subtitle = "Most money earned of all time",
-		Position = Vector3.new(-263, 0, -31),
+		Position = Vector3.new(-253, 0, -38),
 		Accent = Color3.fromRGB(120, 240, 130),
 		Top = Color3.fromRGB(30, 88, 70),
 		Bottom = Color3.fromRGB(10, 32, 30),
@@ -115,7 +118,7 @@ local BOARD_DEFS: { BoardDef } = {
 		Key = "Rebirths",
 		Title = "♻️ TOP REBIRTHS ♻️",
 		Subtitle = "Most rebirths of all time",
-		Position = Vector3.new(-263, 0, 31),
+		Position = Vector3.new(-253, 0, 38),
 		Accent = Color3.fromRGB(255, 125, 220),
 		Top = Color3.fromRGB(80, 40, 110),
 		Bottom = Color3.fromRGB(24, 14, 42),
@@ -133,6 +136,9 @@ local boards: { Board } = {}
 -- Last value written per store and UserId (skips writes of unchanged scores).
 local lastWritten: { [string]: { [number]: number } } = {}
 local nameCache: { [number]: string } = {}
+-- Last known scores of the players of this server. At shutdown DataService's BindToClose can
+-- release the player data before the players are removed: these are written instead.
+local snapshots: { [Player]: { [string]: number } } = {}
 local pendingWrites = 0
 local canWrite = not RunService:IsStudio() or LEADERBOARD.WriteInStudio
 
@@ -173,7 +179,13 @@ local function getScores(player: Player): { [string]: number }?
 	for _, board in boards do
 		scores[board.Def.Key] = toScore(board.Def.GetScore(data))
 	end
+	snapshots[player] = scores
 	return scores
+end
+
+-- Live scores, or the last snapshot once the data is released (shutdown). Never yields.
+local function getLatestScores(player: Player): { [string]: number }?
+	return getScores(player) or snapshots[player]
 end
 
 local function openStores()
@@ -673,26 +685,35 @@ function LeaderboardService.Init(services)
 	end
 end
 
+-- Writes the scores of a player in a new thread, with a few tries (BindToClose waits for it).
+-- forget: the player is leaving, drop what was written for them once done.
+local function writeInBackground(userId: number, scores: { [string]: number }, forget: boolean)
+	pendingWrites += 1
+	task.spawn(function()
+		openStores()
+		for _, board in boards do
+			for attempt = 1, LEAVE_WRITE_ATTEMPTS do
+				if writeScore(board, userId, scores[board.Def.Key]) then
+					break
+				elseif attempt < LEAVE_WRITE_ATTEMPTS then
+					task.wait(2)
+				end
+			end
+			if forget then
+				lastWritten[board.Def.Key][userId] = nil
+			end
+		end
+		pendingWrites -= 1
+	end)
+end
+
 function LeaderboardService.OnPlayerRemoving(player: Player)
 	-- Must not yield (the final data save comes right after): snapshot now, write in a thread.
 	local userId = player.UserId
-	local scores = if canWrite then getScores(player) else nil
+	local scores = if canWrite then getLatestScores(player) else nil
+	snapshots[player] = nil
 	if scores then
-		pendingWrites += 1
-		task.spawn(function()
-			openStores()
-			for _, board in boards do
-				for attempt = 1, LEAVE_WRITE_ATTEMPTS do
-					if writeScore(board, userId, scores[board.Def.Key]) then
-						break
-					elseif attempt < LEAVE_WRITE_ATTEMPTS then
-						task.wait(2)
-					end
-				end
-				lastWritten[board.Def.Key][userId] = nil
-			end
-			pendingWrites -= 1
-		end)
+		writeInBackground(userId, scores, true)
 	end
 	renderAll(userId)
 end
@@ -733,8 +754,29 @@ function LeaderboardService.Start()
 		end
 	end)
 
-	-- Let the scores of the last players reach the stores when the server shuts down.
+	-- Snapshots of the live scores, for the shutdown below (only table reads).
+	if canWrite then
+		task.spawn(function()
+			while true do
+				task.wait(SNAPSHOT_INTERVAL)
+				for _, player in Players:GetPlayers() do
+					getScores(player)
+				end
+			end
+		end)
+	end
+
+	-- Let the scores of the last players reach the stores when the server shuts down. The players
+	-- may still be here (their data possibly released already): write their latest scores now.
 	game:BindToClose(function()
+		if canWrite then
+			for _, player in Players:GetPlayers() do
+				local scores = getLatestScores(player)
+				if scores then
+					writeInBackground(player.UserId, scores, false)
+				end
+			end
+		end
 		local deadline = os.clock() + 15
 		while pendingWrites > 0 and os.clock() < deadline do
 			task.wait(0.2)

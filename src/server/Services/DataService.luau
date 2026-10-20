@@ -120,12 +120,7 @@ function DataService.LoadAsync(player: Player): { [string]: any }?
 			old = if type(old) == "table" then old else {}
 			local now = os.time()
 			local session = old.Session
-			if
-				not forceSteal
-				and session
-				and session.JobId ~= game.JobId
-				and now - (session.Time or 0) < DATA.SessionLockExpiry
-			then
+			if not forceSteal and session and session.JobId ~= game.JobId and now - (session.Time or 0) < DATA.SessionLockExpiry then
 				lockedElsewhere = true
 				return nil -- cancel the write, try again later
 			end

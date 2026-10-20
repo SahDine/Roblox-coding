@@ -55,7 +55,8 @@ function RebirthController.Start()
 		BackgroundColor3 = Color3.new(1, 1, 1),
 		Parent = bar,
 	}, { UIKit.Corner(10), UIKit.Gradient(Color3.fromRGB(200, 140, 255), UIKit.Colors.Purple) })
-	local progressLabel = UIKit.Label({ Text = "", Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3), ZIndex = 2, Parent = bar })
+	local progressLabel =
+		UIKit.Label({ Text = "", Size = UDim2.new(1, -12, 1, -6), Position = UDim2.fromOffset(6, 3), ZIndex = 2, Parent = bar })
 
 	local button
 	button = UIKit.Button({

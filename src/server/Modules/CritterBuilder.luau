@@ -280,7 +280,15 @@ function CritterBuilder:_worldCFrame(cframe: CFrame): CFrame
 end
 
 -- Draws design-space triangles. Returns a handle whose Tris are in actual design space.
-function CritterBuilder:_triangles(name: string, triangles: { LowPoly.TriangleWithInside }, color: any, opts: Options?, thickness: number, center: Vector3, size: Vector3): Handle
+function CritterBuilder:_triangles(
+	name: string,
+	triangles: { LowPoly.TriangleWithInside },
+	color: any,
+	opts: Options?,
+	thickness: number,
+	center: Vector3,
+	size: Vector3
+): Handle
 	local first: BasePart? = nil
 	local actualTris = table.create(#triangles)
 	local t = ((opts and opts.Thickness) or thickness) * self.Scale
@@ -369,7 +377,14 @@ function CritterBuilder:Limb(name: string, a: Vector3, b: Vector3, thickness: nu
 	return self:_triangles(name, triangles, color, opts, shellThickness(radius * 2 * flatten), (a + b) / 2, size)
 end
 
-function CritterBuilder:Chain(name: string, points: { Vector3 }, fromThickness: number, toThickness: number, color: any, opts: Options?): Handle
+function CritterBuilder:Chain(
+	name: string,
+	points: { Vector3 },
+	fromThickness: number,
+	toThickness: number,
+	color: any,
+	opts: Options?
+): Handle
 	local radii = {}
 	local count = #points
 	for index = 1, count do
@@ -397,7 +412,15 @@ function CritterBuilder:Cone(name: string, base: Vector3, tip: Vector3, radius: 
 	return self:_triangles(name, triangles, color, opts, shellThickness(radius * 2), (base + tip) / 2, size)
 end
 
-function CritterBuilder:Cylinder(name: string, height: number, diameter: number, position: Vector3, rot: Vector3?, color: any, opts: Options?): Handle
+function CritterBuilder:Cylinder(
+	name: string,
+	height: number,
+	diameter: number,
+	position: Vector3,
+	rot: Vector3?,
+	color: any,
+	opts: Options?
+): Handle
 	local frame = CFrame.new(position) * rotation(rot)
 	local options = table.clone(opts or {}) :: Options
 	options.Sides = options.Sides or 6
@@ -428,7 +451,15 @@ function CritterBuilder:Wedge(name: string, size: Vector3, position: Vector3, ro
 	}
 	local polygons = { { 1, 2, 3, 4 }, { 4, 3, 6, 5 }, { 1, 5, 6, 2 }, { 1, 4, 5 }, { 2, 6, 3 } }
 	local smallest = math.min(size.X, size.Y, size.Z)
-	return self:_triangles(name, LowPoly.BulgedTriangles(vertices, polygons, smallest * 0.1), color, opts, shellThickness(smallest), position, size)
+	return self:_triangles(
+		name,
+		LowPoly.BulgedTriangles(vertices, polygons, smallest * 0.1),
+		color,
+		opts,
+		shellThickness(smallest),
+		position,
+		size
+	)
 end
 
 -- Flat triangle through three points.
@@ -441,7 +472,15 @@ end
 -- Flat isosceles triangle whose base is centred on `base` and whose point is `tip`.
 -- facingHint: direction the flat side faces (default: front, -Z). Vector3.new(1, 0, 0) for dorsal fins seen
 -- from the side, Vector3.new(0, 1, 0) for horizontal triangles (wings).
-function CritterBuilder:Blade(name: string, base: Vector3, tip: Vector3, width: number, color: any, opts: Options?, facingHint: Vector3?): Handle
+function CritterBuilder:Blade(
+	name: string,
+	base: Vector3,
+	tip: Vector3,
+	width: number,
+	color: any,
+	opts: Options?,
+	facingHint: Vector3?
+): Handle
 	local frame = pointing(base, tip - base, facingHint)
 	local half = width / 2
 	local a = base + frame.XVector * half
@@ -454,7 +493,16 @@ end
 	Thin (depth < 0.3 * width): a flat triangle `depth` thick (fins, leaves, wings, flames).
 	Otherwise: a 3-sided pyramid with a ridge towards facingHint (ears, horns, spikes, crests).
 ]]
-function CritterBuilder:Spike(name: string, base: Vector3, tip: Vector3, width: number, depth: number, color: any, opts: Options?, facingHint: Vector3?): Handle
+function CritterBuilder:Spike(
+	name: string,
+	base: Vector3,
+	tip: Vector3,
+	width: number,
+	depth: number,
+	color: any,
+	opts: Options?,
+	facingHint: Vector3?
+): Handle
 	if depth < width * 0.3 then
 		local options = table.clone(opts or {}) :: Options
 		options.Thickness = options.Thickness or math.max(depth, 0.06)
@@ -504,7 +552,14 @@ function CritterBuilder:MirrorLimb(name: string, a: Vector3, b: Vector3, thickne
 	end)
 end
 
-function CritterBuilder:MirrorChain(name: string, points: { Vector3 }, fromThickness: number, toThickness: number, color: any, opts: Options?)
+function CritterBuilder:MirrorChain(
+	name: string,
+	points: { Vector3 },
+	fromThickness: number,
+	toThickness: number,
+	color: any,
+	opts: Options?
+)
 	self:_mirrored(function(suffix)
 		self:Chain(name .. suffix, points, fromThickness, toThickness, color, opts)
 	end)
@@ -528,19 +583,44 @@ function CritterBuilder:MirrorCone(name: string, base: Vector3, tip: Vector3, ra
 	end)
 end
 
-function CritterBuilder:MirrorCylinder(name: string, height: number, diameter: number, position: Vector3, rot: Vector3?, color: any, opts: Options?)
+function CritterBuilder:MirrorCylinder(
+	name: string,
+	height: number,
+	diameter: number,
+	position: Vector3,
+	rot: Vector3?,
+	color: any,
+	opts: Options?
+)
 	self:_mirrored(function(suffix)
 		self:Cylinder(name .. suffix, height, diameter, position, rot, color, opts)
 	end)
 end
 
-function CritterBuilder:MirrorSpike(name: string, base: Vector3, tip: Vector3, width: number, depth: number, color: any, opts: Options?, facingHint: Vector3?)
+function CritterBuilder:MirrorSpike(
+	name: string,
+	base: Vector3,
+	tip: Vector3,
+	width: number,
+	depth: number,
+	color: any,
+	opts: Options?,
+	facingHint: Vector3?
+)
 	self:_mirrored(function(suffix)
 		self:Spike(name .. suffix, base, tip, width, depth, color, opts, facingHint)
 	end)
 end
 
-function CritterBuilder:MirrorBlade(name: string, base: Vector3, tip: Vector3, width: number, color: any, opts: Options?, facingHint: Vector3?)
+function CritterBuilder:MirrorBlade(
+	name: string,
+	base: Vector3,
+	tip: Vector3,
+	width: number,
+	color: any,
+	opts: Options?,
+	facingHint: Vector3?
+)
 	self:_mirrored(function(suffix)
 		self:Blade(name .. suffix, base, tip, width, color, opts, facingHint)
 	end)
@@ -676,7 +756,8 @@ function CritterBuilder:_stud(name: string, frame: CFrame, size: Vector3, color:
 	if math.max(size.X, size.Y) >= 0.25 then
 		corners = { base + right * (size.X / 2), base + up * (size.Y / 2), base - right * (size.X / 2), base - up * (size.Y / 2) }
 	else
-		corners = { base + up * (size.Y / 2), base - right * (size.X / 2) - up * (size.Y / 4), base + right * (size.X / 2) - up * (size.Y / 4) }
+		corners =
+			{ base + up * (size.Y / 2), base - right * (size.X / 2) - up * (size.Y / 4), base + right * (size.X / 2) - up * (size.Y / 4) }
 	end
 	local inside = base - look * size.Z
 	local triangles = {}
@@ -859,7 +940,9 @@ function CritterBuilder:Finish(): Model
 	root.CanCollide = true
 	model.PrimaryPart = root
 
-	local coreCenter = if self.CoreCenter then self:_world(self.CoreCenter) else self.CoreParts[1] and self.CoreParts[1].Position or root.Position
+	local coreCenter = if self.CoreCenter
+		then self:_world(self.CoreCenter)
+		else self.CoreParts[1] and self.CoreParts[1].Position or root.Position
 	local core = invisiblePart("Core", Vector3.new(1.2, 1.2, 1.2) * s, CFrame.new(coreCenter), model)
 	local bounce = Instance.new("Motor6D")
 	bounce.Name = "Bounce"

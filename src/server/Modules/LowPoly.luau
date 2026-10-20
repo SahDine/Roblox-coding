@@ -351,7 +351,15 @@ end
 
 -- Double pyramid from a to b: a ring of `sides` vertices at `ringAt` (0..1) along the axis, pointed ends.
 -- The cheapest limb (2 * sides triangles).
-function LowPoly.SpindleTriangles(a: Vector3, b: Vector3, radius: number, sides: number?, ringAt: number?, flatten: number?, up: Vector3?): { TriangleWithInside }
+function LowPoly.SpindleTriangles(
+	a: Vector3,
+	b: Vector3,
+	radius: number,
+	sides: number?,
+	ringAt: number?,
+	flatten: number?,
+	up: Vector3?
+): { TriangleWithInside }
 	local n = sides or 3
 	local axis = b - a
 	local u, v = perpendiculars(axis, up)
@@ -371,7 +379,14 @@ function LowPoly.SpindleTriangles(a: Vector3, b: Vector3, radius: number, sides:
 end
 
 -- Pyramid from a base centre to a tip (horns, beaks, pine trees, crystals).
-function LowPoly.ConeTriangles(base: Vector3, tip: Vector3, radius: number, sides: number?, closed: boolean?, up: Vector3?): { TriangleWithInside }
+function LowPoly.ConeTriangles(
+	base: Vector3,
+	tip: Vector3,
+	radius: number,
+	sides: number?,
+	closed: boolean?,
+	up: Vector3?
+): { TriangleWithInside }
 	local n = sides or 4
 	local axis = tip - base
 	local u, v = perpendiculars(axis, up)
@@ -531,7 +546,15 @@ function LowPoly.Tube(points: { Vector3 }, radii: { number }, props: PartProps, 
 	return LowPoly.DrawTriangles(LowPoly.TubeTriangles(points, radii, options), props, parent, defaultThickness(props, largest))
 end
 
-function LowPoly.Cone(base: Vector3, tip: Vector3, radius: number, props: PartProps, parent: Instance, sides: number?, closed: boolean?): { BasePart }
+function LowPoly.Cone(
+	base: Vector3,
+	tip: Vector3,
+	radius: number,
+	props: PartProps,
+	parent: Instance,
+	sides: number?,
+	closed: boolean?
+): { BasePart }
 	return LowPoly.DrawTriangles(LowPoly.ConeTriangles(base, tip, radius, sides, closed), props, parent, defaultThickness(props, radius))
 end
 

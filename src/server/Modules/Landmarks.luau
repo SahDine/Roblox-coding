@@ -305,7 +305,8 @@ local function meshTriangles(data: LowPoly.MeshData, cframe: CFrame, size: Vecto
 end
 
 -- Side band of a prism from `bottom` to `top` (no caps): the top ring is turned by half a step so
--- every facet is a triangle.
+-- every facet is a triangle. Returns the band, its top ring and its bottom ring (caps must use
+-- exactly these vertices).
 local function prismSides(
 	bottom: Vector3,
 	top: Vector3,
@@ -313,7 +314,7 @@ local function prismSides(
 	topRadius: number,
 	sides: number,
 	twist: number
-): (Triangles, { [number]: Vector3 })
+): (Triangles, { [number]: Vector3 }, { [number]: Vector3 })
 	local axis = (top - bottom).Unit
 	local u, v = LowPoly.Perpendiculars(axis, Vector3.new(math.cos(twist), 0, math.sin(twist)))
 	local low, high = {}, {}
@@ -330,7 +331,7 @@ local function prismSides(
 		table.insert(triangles, { A = low[k], B = low[k1], C = high[k], Inside = inside })
 		table.insert(triangles, { A = low[k1], B = high[k1], C = high[k], Inside = inside })
 	end
-	return triangles, high
+	return triangles, high, low
 end
 
 -- Braziers ----------------------------------------------------------------------------------
@@ -630,13 +631,14 @@ end
 
 --[[
 	Iron lamp post with a glowing crystal held by a gold cradle (~20 parts). Non-collidable: the
-	plaza must stay free to run across.
+	plaza must stay free to run across. height (default 7): height of the post, whose top is 0.7
+	higher (it stands on a foot).
 ]]
-function Landmarks.PlazaLamp(parent: Instance, base: Vector3, color: Color3, facing: Vector3?): Model
+function Landmarks.PlazaLamp(parent: Instance, base: Vector3, color: Color3, facing: Vector3?, height: number?): Model
 	local model = newModel("PlazaLamp", parent)
 	local look = facing or Vector3.xAxis
 	local frame = CFrame.lookAt(base, base + Vector3.new(look.X, 0, look.Z))
-	local postHeight = 7
+	local postHeight = height or 7
 	Decor.Part({
 		Name = "LampFoot",
 		Size = Vector3.new(1.3, 0.7, 1.3),
@@ -853,11 +855,11 @@ function Landmarks.Ruins(parent: Instance, center: Vector3, yaw: number, seed: n
 		LowPoly.Triangle(p, p + frame.RightVector * 1.4, p - Vector3.new(0, 2.6, 0), vine, model)
 	end
 
-	-- Fallen column drum lying on the ground, closed at both ends.
+	-- Fallen column drum lying on the ground, closed at both ends (the caps use the band's own end
+	-- rings: they are turned by half a step from each other).
 	local a, b = at(7.5, 1), at(8.5, 7.2)
 	local lift = Vector3.new(0, 0.8, 0)
-	local drum, ringB = prismSides(a + lift, b + lift, 0.85, 0.85, 5, 0.4)
-	local _, ringA = prismSides(b + lift, a + lift, 0.85, 0.85, 5, 0.4)
+	local drum, ringB, ringA = prismSides(a + lift, b + lift, 0.85, 0.85, 5, 0.4)
 	for k = 0, 4 do
 		local k1 = (k + 1) % 5
 		table.insert(drum, { A = ringB[k], B = ringB[k1], C = b + lift, Inside = (a + b) / 2 + lift })
