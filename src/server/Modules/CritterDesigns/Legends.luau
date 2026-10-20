@@ -449,26 +449,27 @@ Designs["Frostwing"] = function(b)
 		})
 	end)
 
-	-- Long tail: three twisting streamers flowing back and down in a wave (they sway with the tail bone).
+	-- Long tail: three broad streamers flowing back in a gentle wave, fanning out and turning a little as they
+	-- go, pale towards the pointed tips (they sway with the tail bone).
 	b:Bone("Tail", V(0, 1.2, 0.9), nil, function()
 		local function streamer(name: string, x: number, length: number, twist: number)
 			local points = {
 				V(x * 0.3, 1.3, 0.72),
-				V(x * 0.7, 0.88, 1.3),
-				V(x, 0.5, 1.2 + 0.65 * length),
-				V(x * 1.2, 0.62, 1.2 + 1.15 * length),
-				V(x * 1.4, 1.2, 1.2 + 1.45 * length),
+				V(x * 0.65, 1.0, 1.3),
+				V(x * 0.95, 0.8, 1.2 + 0.7 * length),
+				V(x * 1.2, 0.8, 1.2 + 1.2 * length),
+				V(x * 1.35, 0.98, 1.2 + 1.6 * length),
 			}
 			local across = {}
 			for i = 1, #points do
 				local a = math.rad(twist * (i - 1))
 				across[i] = V(math.cos(a), math.sin(a), 0)
 			end
-			ribbon(b, name, points, { 0.1, 0.17, 0.18, 0.13, 0 }, across, { "Body", "Body", "Accent", "Accent" })
+			ribbon(b, name, points, { 0.12, 0.21, 0.25, 0.18, 0 }, across, { "Body", "Body", "Accent", "Accent" })
 		end
-		streamer("TailMid", 0, 1, 28)
-		streamer("TailR", 0.34, 0.8, -32)
-		streamer("TailL", -0.34, 0.8, 32)
+		streamer("TailMid", 0, 1, 6)
+		streamer("TailR", 0.36, 0.82, -10)
+		streamer("TailL", -0.36, 0.82, 10)
 	end)
 
 	b:Particles(body, Color3.fromRGB(220, 240, 255), 8, 0.35)
@@ -602,8 +603,8 @@ Designs["Wishstar"] = function(b)
 		b:Ball("Hand", V(0.34, 0.34, 0.3), V(0.84, 1.5, -0.24), nil, "Body", { Detail = 0, Thickness = 0.04 })
 	end)
 
-	-- Streamers flowing down from the back, twisting as they fall.
-	b:MirrorBone("Wing", V(0.15, 1.3, 0.32), nil, function()
+	-- Streamers flowing down from the back, twisting as they fall (Wing bones, damped: they flutter, not flap).
+	b:MirrorBone("Wing", V(0.15, 1.3, 0.32), { Amp = 0.45 }, function()
 		local points = { V(0.1, 1.38, 0.24), V(0.38, 1.0, 0.68), V(0.62, 0.45, 0.86), V(0.72, -0.05, 0.76), V(0.6, -0.42, 0.55) }
 		local across = {}
 		for i = 1, #points do
@@ -682,12 +683,20 @@ Designs["Skyserpent"] = function(b)
 
 	local chest = tubePart(b, "Body", body, 1, 4, paint)
 	b:SetCore(chest)
-	b:MirrorBone("Arm", V(0.42, 2.2, -0.12), { Phase = 0.5 }, function()
-		prong(b, "Arm", V(0.36, 2.24, -0.08), V(0.72, 1.92, -0.55), 0.2, 0.16, DOWN, "Body")
-		for index, dx in { -0.08, 0.04, 0.14 } do
-			feather(b, "Claw" .. index, V(0.7 + dx * 0.4, 1.95, -0.52), V(0.72 + dx, 1.86, -0.72), 0.07, UP, "Body")
+	-- Small clawed arms on both sides of the chest. The body leans to the right here (it is not symmetric), so
+	-- each arm is placed from the body's own centre line rather than mirrored around x = 0.
+	local shoulder = points[2]:Lerp(points[3], 0.83)
+	for _, s in { 1, -1 } do
+		local function at(x: number, y: number, z: number): Vector3
+			return shoulder + V(s * x, y, z)
 		end
-	end)
+		b:Bone("Arm" .. (if s > 0 then "R" else "L"), at(0.2, 0, 0), { Role = "Arm", Phase = if s > 0 then 0.5 else 0 }, function()
+			prong(b, "Arm", at(0.12, 0.02, 0.02), at(0.5, -0.32, -0.45), 0.2, 0.16, DOWN, "Body")
+			for index, dx in { -0.08, 0.04, 0.14 } do
+				feather(b, "Claw" .. index, at(0.48 + dx * 0.4, -0.29, -0.42), at(0.5 + dx, -0.38, -0.62), s * 0.07, UP, "Body")
+			end
+		end)
+	end
 	finPair("FinFront", 4, 0.95)
 
 	b:Bone("Tail", points[4], { Amp = 0.35 }, function()
@@ -837,19 +846,25 @@ end
 	no two triangles share a plane) painted pixel by pixel with colorOf(column, row, half); the back closes on a
 	faceted point. Vertices depend only on their position, so two slabs sharing an edge meet seamlessly.
 ]]
-local function slab(b, name: string, corner: Vector3, nx: number, ny: number, cell: number, depth: number, colorOf)
+local function slab(b, name: string, corner: Vector3, nx: number, ny: number, cell: number, depth: number, colorOf, calm: any?)
 	local vertices, index = {}, {}
 	for i = 0, nx do
 		index[i] = {}
 		for j = 0, ny do
 			local x, y = corner.X - i * cell, corner.Y + j * cell
-			table.insert(vertices, V(x, y, corner.Z - depth + (noise(x, y) - 0.5) * 0.18))
+			local jitter = (noise(x, y) - 0.5) * 0.18 * (if calm then calm(x, y) else 1)
+			table.insert(vertices, V(x, y, corner.Z - depth + jitter))
 			index[i][j] = #vertices
 		end
 	end
 	local center = V(corner.X - nx * cell / 2, corner.Y + ny * cell / 2, corner.Z)
 	table.insert(vertices, center + V(0, 0, depth * 1.6))
 	local apex = #vertices
+	-- Unused copies of the apex pull the mesh centre (the plates' inside point) halfway back into the slab:
+	-- with only the front grid it would sit on the jittered front and flip some facets inside out.
+	for _ = 1, apex - 1 do
+		table.insert(vertices, vertices[apex])
+	end
 	local faces, colors = {}, {}
 	for i = 1, nx do
 		for j = 1, ny do
@@ -917,7 +932,11 @@ Designs["Glitchno"] = function(b)
 		end
 	end
 	-- Tall column on the left side (the viewer's right), a lower block beside it: a backwards L.
-	local column = slab(b, "Column", V(0, 0.25, 0), 2, 8, cell, 0.3, colorOf(0))
+	-- The face rows are only slightly jittered so the eyes and the mouth sit square on the pixels.
+	local faceY = 0.25 + 6.6 * cell
+	local column = slab(b, "Column", V(0, 0.25, 0), 2, 8, cell, 0.3, colorOf(0), function(_x: number, y: number): number
+		return if math.abs(y - faceY + 0.25) < 0.75 then 0.15 else 1
+	end)
 	b:SetCore(column)
 	slab(b, "Foot", V(2 * cell, 0.25, 0), 2, 4, cell, 0.3, colorOf(5))
 	-- Two rows of pixels slipped sideways out of the block, like a corrupted picture (they jitter up and down).
@@ -929,8 +948,8 @@ Designs["Glitchno"] = function(b)
 	end)
 
 	-- Face near the top of the column: wide dazed eyes and a little open mouth.
-	local face = { Part = nil, Center = V(-cell, 0.25 + 6.6 * cell, 0), Size = column.Size, Tris = column.Tris }
-	b:Eyes(face, cell * 0.5, 0, V(0.3, 0.36, 0.22), "Black", "Dazed")
+	local face = { Part = nil, Center = V(-cell, faceY, 0), Size = column.Size, Tris = column.Tris }
+	b:Eyes(face, cell * 0.5, 0, V(0.37, 0.43, 0.24), "Black", "Dazed")
 	b:Mouth(face, -cell * 0.9, 0.22, true)
 
 	-- Pixels torn out of the sides (sunk in the block) and stray pixels floating around it.

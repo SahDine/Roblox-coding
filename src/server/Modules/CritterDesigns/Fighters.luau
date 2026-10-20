@@ -708,10 +708,10 @@ Designs["Blazehound"] = function(b)
 		b:Eyes(head, 0.36, 0.14, V(0.36, 0.4, 0.28), DOG_EYE, "Angry")
 		faceTri(b, "Nose", head, 0, -0.2, 0.22, 0.14, "Black", 0.05)
 		b:Mouth(head, -0.44, 0.28)
-		-- Long cream forelock swept back over the head, a lock down the back of the head, fluffy cream cheeks.
-		prong(b, "Crest", V(0, 3.98, -1.62), V(0, 4.62, 0.05), 0.86, 0.5, DOWN, "Belly")
-		prong(b, "Nape", V(0, 4.1, -0.95), V(0, 3.05, 0.1), 0.9, 0.45, FRONT, "Belly")
+		-- Big spiky cream forelock swept up and back (Growlpup's, grown up), fluffy cream cheeks.
+		prong(b, "Tuft", V(0, 3.92, -1.37), V(0, 4.85, -0.42), 0.82, 0.56, FRONT, "Belly")
 		for _, side in { -1, 1 } do
+			prong(b, "TuftSide" .. side, V(side * 0.26, 3.9, -1.25), V(side * 0.66, 4.5, -0.5), 0.58, 0.4, FRONT, "Belly")
 			prong(b, "Cheek" .. side, V(side * 0.55, 3.35, -1.15), V(side * 1.15, 3.08, -0.82), 0.48, 0.32, BACK, "Belly")
 		end
 		b:MirrorBone("Ear", V(0.45, 3.95, -1.05), nil, function()
@@ -828,7 +828,8 @@ Designs["Aurajack"] = function(b)
 	local body = sculpt(b, "Body", V(1.3, 1.55, 0.95), V(0, 2.25, 0.05), nil, "Body", {
 		Detail = 1,
 		Deform = function(v: Vector3): Vector3
-			return V(v.X * (0.86 + v.Y * 0.16), v.Y, v.Z)
+			-- Broad chest, narrow waist, and a blunt crotch (the bottom vertex pulled up between the thighs).
+			return V(v.X * (0.86 + v.Y * 0.16), if v.Y < -0.99 then -0.72 else v.Y, v.Z)
 		end,
 		Paint = function(normal: Vector3, offset: Vector3)
 			return if normal.Z < -0.3 and offset.Y > -0.2 then "Belly" else nil
@@ -840,7 +841,7 @@ Designs["Aurajack"] = function(b)
 	for _, side in { -1, 1 } do
 		prong(b, "Fur" .. side, V(side * 0.34, 2.46, -0.3), V(side * 0.5, 1.86, -0.36), 0.42, 0.24, BACK, "Belly")
 	end
-	prong(b, "ChestSpike", V(0, 2.66, -0.32), V(0, 2.54, -0.74), 0.34, 0.28, DOWN, "White")
+	prong(b, "ChestSpike", V(0, 2.7, -0.28), V(0, 2.6, -0.98), 0.4, 0.34, DOWN, "White")
 
 	b:MirrorBone("Leg", V(0.3, 1.65, 0.05), nil, function()
 		column(b, "Leg", { V(0.28, 1.8, 0.05), V(0.36, 0.95, -0.02), V(0.38, 0.06, -0.06) }, { 0.3, 0.24, 0.16 }, { "Body", "Accent" }, 1.9)
@@ -965,11 +966,11 @@ Designs["Snoozor"] = function(b)
 	-- Short legs: big cream feet, the toes forwards with three white claws.
 	b:MirrorBone("LegFoot", V(0.9, 0.62, -0.3), { Amp = 0.45 }, function()
 		stompFoot(b, "Foot", V(1.08, 0.7, 1.4), V(0.9, 0.35, -0.76), V(0, 2.4, 0.45), "Belly")
-		claws(b, "Claw", V(0.9, 0.4, -1.22), V(0, 1, -0.6), SIDE, 3, 0.26, 0.3)
+		claws(b, "Claw", V(0.9, 0.38, -1.12), V(0, 0.8, -1), SIDE, 3, 0.19, 0.32)
 	end)
 	b:MirrorBone("Arm", V(1.25, 2.4, -0.1), { Phase = 0.5 }, function()
-		b:Limb("Arm", V(1.08, 2.55, -0.05), V(1.86, 1.42, -0.5), 0.82, "Body", { RingAt = 0.5, Sides = 4, Thickness = 0.08 })
-		claws(b, "Claw", V(1.88, 1.42, -0.58), V(0.25, -1, -0.45), SIDE, 3, 0.17, 0.28)
+		b:Limb("Arm", V(1.08, 2.55, -0.05), V(1.86, 1.42, -0.5), 0.82, "Body", { RingAt = 0.62, Sides = 4, Thickness = 0.08 })
+		claws(b, "Claw", V(1.8, 1.56, -0.52), V(0.25, -1, -0.45), SIDE, 3, 0.15, 0.3)
 	end)
 	b:Bone("Head", V(0, 2.9, -0.1), { Amp = 0.7 }, function()
 		local head = lathe(
@@ -1061,7 +1062,7 @@ Designs["Psyclone"] = function(b)
 		b:Eyes(head, 0.22, 0.06, V(0.24, 0.22, 0.2), PSY_EYE, "Angry")
 		b:MirrorSpike("Horn", V(0.2, 3.6, 0.0), V(0.33, 3.94, 0.14), 0.32, 0.26, "Body", THIN, BACK)
 		-- Tube from the back of the skull down to the upper back.
-		b:Limb("Tube", V(0, 3.56, 0.2), V(0, 2.92, 0.5), 0.26, "Body", { RingAt = 0.4, Thickness = 0.06 })
+		b:Limb("Tube", V(0, 3.56, 0.2), V(0, 2.84, 0.3), 0.26, "Body", { RingAt = 0.4, Thickness = 0.06 })
 	end)
 end
 
