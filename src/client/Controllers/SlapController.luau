@@ -12,8 +12,10 @@
 	    character is doing. R15 also straightens the elbow.
 	  * Upper body (R15 UpperTorso.Waist, R6 HumanoidRootPart.RootJoint): a twist added on top.
 
-	The server fires SlapFx(slapper) to every client for each accepted swing (hits and misses).
-	The local player's swing starts right on click (Tool.Activated) and its echo is ignored.
+	The server fires SlapFx(slapper, target?) to every client for each accepted swing (hits and
+	misses). The local player's swing starts right on click (Tool.Activated) and its echo is only
+	used for the hit sound. On a hit, the glove's HitSound plays when the hand crosses the front
+	(the target hears it at once: their knockback starts right away).
 ]]
 
 local Players = game:GetService("Players")
@@ -36,6 +38,7 @@ local RECOVER = 0.22 -- back to the animated pose
 local SWEEP_END = WIND_UP + SWEEP
 local RECOVER_START = SWEEP_END + HOLD
 local DURATION = RECOVER_START + RECOVER
+local IMPACT = WIND_UP + SWEEP * 0.5 -- the hand crosses the front of the body: hit sound
 
 -- Arm direction relative to the torso: yaw around its vertical axis (0 = straight ahead,
 -- + = to the left) and pitch from hanging down (90 degrees = horizontal).
@@ -70,6 +73,7 @@ type Swing = {
 	Twist: number,
 	Trail: Trail?,
 	TrailOn: boolean,
+	HitPending: boolean, -- play the hit sound at IMPACT
 }
 
 local swings: { [Model]: Swing } = {}
@@ -182,6 +186,14 @@ end
 
 -- Swings --------------------------------------------------------------------------------------
 
+-- A sound of the glove the character holds (the tool is in the character while it is equipped).
+local function gloveSound(character: Model, name: string): Sound?
+	local tool = character:FindFirstChild("Slap")
+	local handle = tool and tool:FindFirstChild("Handle")
+	local sound = handle and handle:FindFirstChild(name)
+	return if sound and sound:IsA("Sound") then sound else nil
+end
+
 local function finish(character: Model, swing: Swing)
 	restore(swing.Shoulder)
 	restore(swing.Elbow)
@@ -223,6 +235,14 @@ local function step()
 			swing.Trail.Enabled = trailOn
 		end
 		swing.TrailOn = trailOn
+
+		if swing.HitPending and t >= IMPACT then
+			swing.HitPending = false
+			local hit = gloveSound(character, "HitSound")
+			if hit then
+				hit:Play()
+			end
+		end
 	end
 
 	if next(swings) == nil and stepConnection then
@@ -267,6 +287,7 @@ local function playSwing(character: Model)
 			TwistFrom = 0,
 			Twist = 0,
 			TrailOn = false,
+			HitPending = false,
 		}
 		swings[character] = swing
 	end
@@ -276,20 +297,35 @@ local function playSwing(character: Model)
 	local handle = tool and tool:FindFirstChild("Handle")
 	if handle then
 		local trail = handle:FindFirstChild("SwingTrail")
-		if trail and trail:IsA("Trail") then
-			if swing.Trail and swing.Trail ~= trail then
+		if trail and trail:IsA("Trail") and trail ~= swing.Trail then
+			if swing.Trail then
 				swing.Trail.Enabled = false
 			end
 			swing.Trail = trail
+			swing.TrailOn = false -- the new trail is switched on by the next step
 		end
-		local whoosh = handle:FindFirstChild("Whoosh")
-		if whoosh and whoosh:IsA("Sound") then
+		local whoosh = gloveSound(character, "Whoosh")
+		if whoosh then
 			whoosh:Play()
 		end
 	end
 
 	if not stepConnection then
 		stepConnection = RunService.PreSimulation:Connect(step)
+	end
+end
+
+-- The slap landed: the hit sound plays when the hand crosses the front, or right away if it already
+-- has (and for the target, who is knocked back at once).
+local function landHit(character: Model, isTarget: boolean)
+	local swing = swings[character]
+	if swing and not isTarget and os.clock() - swing.Start < IMPACT then
+		swing.HitPending = true -- played by step
+		return
+	end
+	local hit = gloveSound(character, "HitSound")
+	if hit then
+		hit:Play()
 	end
 end
 
@@ -333,20 +369,29 @@ function SlapController.Start()
 		watchCharacter(player.Character)
 	end
 
-	Remotes.SlapFx.OnClientEvent:Connect(function(slapper: unknown)
+	Remotes.SlapFx.OnClientEvent:Connect(function(slapper: unknown, target: unknown)
 		if typeof(slapper) ~= "Instance" or not slapper:IsA("Player") then
 			return
 		end
+		local hit = typeof(target) == "Instance" and target:IsA("Player")
+		local character = slapper.Character
 		if slapper == player then
 			local now = os.clock()
 			if now - lastLocalSwing < ECHO_WINDOW then
-				return -- already played on click
+				-- Already played on click: only the hit sound is new.
+				if hit and character then
+					landHit(character, false)
+				end
+				return
 			end
 			lastLocalSwing = now
 		end
-		local character = slapper.Character
 		if character then
 			playSwing(character)
+			-- Swings too far away to be animated stay silent (the sound would not carry anyway).
+			if hit and (swings[character] or target == player) then
+				landHit(character, target == player)
+			end
 		end
 	end)
 end

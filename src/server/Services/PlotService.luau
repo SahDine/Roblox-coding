@@ -561,13 +561,15 @@ local function buildPlot(index: number, cframe: CFrame, folder: Folder): Plot
 
 	-- Walls with a trim and merlons ----------------------------------------------------------------
 	local wallY = FLOOR_TOP + WALL_HEIGHT / 2
-	local sideWidth = (WIDTH - ENTRANCE_WIDTH) / 2
+	-- The two front walls end 1 stud inside the gate pillars: their end faces (and the trims') must
+	-- not lie in the pillars' inner faces, which would flicker in the gateway (z-fighting).
+	local sideWidth = (WIDTH - ENTRANCE_WIDTH) / 2 - 1
 	local walls = {
 		{ Vector3.new(WIDTH, 0, 0), Vector3.new(0, 0, DEPTH / 2 - 0.75) },
 		{ Vector3.new(0, 0, DEPTH), Vector3.new(-WIDTH / 2 + 0.75, 0, 0) },
 		{ Vector3.new(0, 0, DEPTH), Vector3.new(WIDTH / 2 - 0.75, 0, 0) },
-		{ Vector3.new(sideWidth, 0, 0), Vector3.new(-(ENTRANCE_WIDTH / 2 + sideWidth / 2), 0, -DEPTH / 2 + 0.75) },
-		{ Vector3.new(sideWidth, 0, 0), Vector3.new(ENTRANCE_WIDTH / 2 + sideWidth / 2, 0, -DEPTH / 2 + 0.75) },
+		{ Vector3.new(sideWidth, 0, 0), Vector3.new(-(WIDTH / 2 - sideWidth / 2), 0, -DEPTH / 2 + 0.75) },
+		{ Vector3.new(sideWidth, 0, 0), Vector3.new(WIDTH / 2 - sideWidth / 2, 0, -DEPTH / 2 + 0.75) },
 	}
 	for wallIndex, wall in walls do
 		local length = math.max(wall[1].X, wall[1].Z)

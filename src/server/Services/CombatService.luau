@@ -74,20 +74,16 @@ local function onSlap(player: Player, tool: Tool)
 	end
 	lastSlap[player] = now
 
-	-- Every client animates the right-to-left swing (SlapController), misses included. No
-	-- "toolanim" value: the default Animate script's slash would fight the swing.
-	Remotes.SlapFx:FireAllClients(player)
-
 	local mega = MonetizationService.OwnsPass(player, "MegaSlap")
 	local target, targetRoot = findTarget(player, root, if mega then SLAP.MegaRange else SLAP.Range)
+
+	-- Every client animates the right-to-left swing (SlapController), misses included, and on a hit
+	-- plays the glove's HitSound when the hand reaches the front (played here, it would be heard by
+	-- the others before the arm even swings). No "toolanim" value: the default Animate script's
+	-- slash would fight the swing.
+	Remotes.SlapFx:FireAllClients(player, target)
 	if not target or not targetRoot then
 		return
-	end
-
-	local handle = tool:FindFirstChild("Handle")
-	local sound = handle and handle:FindFirstChild("HitSound")
-	if sound and sound:IsA("Sound") then
-		sound:Play()
 	end
 
 	local power = if mega then SLAP.MegaKnockback else SLAP.Knockback
@@ -329,7 +325,7 @@ local function addGloveEffects(handle: BasePart, style: GloveStyle)
 	whoosh.RollOffMaxDistance = 90
 	whoosh.Parent = handle
 
-	-- Played by the server when the slap lands.
+	-- Played by every client when the slap lands (SlapController).
 	local hit = Instance.new("Sound")
 	hit.Name = "HitSound"
 	hit.SoundId = GameConfig.Sounds.SlapHit

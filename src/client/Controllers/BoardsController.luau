@@ -32,6 +32,10 @@ type Board = { Rows: { Row }, Luck: TextLabel?, LuckText: string, LuckColor: Col
 
 local boards: { [Instance]: Board } = {}
 
+-- Server text of each luck line, remembered the first time it is seen: a rescan made while Server
+-- Luck is on must not take the live text for the normal one (it would stay after the boost).
+local luckDefaults: { [TextLabel]: { Text: string, Color: Color3 } } = setmetatable({}, { __mode = "k" }) :: any
+
 local expectedRows = 0
 for _, rarity in RARE.Order do
 	if RARE.Timers[rarity] then
@@ -54,9 +58,14 @@ local function scan(board: Instance): Board
 					Progress = if progress and progress:IsA("GuiObject") then progress else nil,
 				})
 			elseif descendant.Name == "LuckLine" then
+				local default = luckDefaults[descendant]
+				if not default then
+					default = { Text = descendant.Text, Color = descendant.TextColor3 }
+					luckDefaults[descendant] = default
+				end
 				result.Luck = descendant
-				result.LuckText = descendant.Text
-				result.LuckColor = descendant.TextColor3
+				result.LuckText = default.Text
+				result.LuckColor = default.Color
 			end
 		end
 	end

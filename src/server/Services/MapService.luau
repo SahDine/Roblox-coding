@@ -8,7 +8,7 @@
 	  * areas with their own character: the spawn plaza (fountain, guardian statues, banners, a ring
 	    of crystals), the conveyor plaza (crystal lamps and pennant garlands at every path), the
 	    gardens in front of the bases, the forest behind them, the ruins and lily ponds of the west
-	    end, the lake garden and crystal grove of the east end,
+	    end, the lake garden, stone circle and crystal grove of the east end,
 	  * the horizon: snowy mountains, clouds and floating islands with waterfalls,
 	  * the fantasy lighting.
 	Player bases are built by PlotService. The scenery stays out of their footprints (+ margin),
@@ -53,7 +53,7 @@ local SPAWN_RADIUS = 30
 local POND_RADIUS = 22
 local PORTAL_X = HALF_CONVEYOR + 2
 local CAMERA_REACH = 72 -- StarterPlayer.CameraMaxZoomDistance (64) plus a margin
-local CHARACTER_CEILING = 100 -- no character stands higher (castle towers are ~30 studs tall)
+local CHARACTER_CEILING = 50 -- no character gets higher (castle roofs ~24 studs + a jump + a mega slap)
 
 local STONE = Color3.fromRGB(150, 145, 160)
 local GOLD = Color3.fromRGB(255, 205, 80)
@@ -76,6 +76,10 @@ local PENNANTS = {
 	Color3.fromRGB(255, 110, 150),
 	Color3.fromRGB(110, 200, 255),
 }
+
+-- Ancient stone circle at the east end, on the conveyor's axis behind the BYE BYE portal.
+local STONE_CIRCLE = Vector3.new(HALF_CONVEYOR + 62, 0, 0)
+local STONE_CIRCLE_RADIUS = 9
 
 local PONDS = {
 	Vector3.new(HALF_CONVEYOR + 50, 0, 60),
@@ -138,6 +142,7 @@ local function computeZones()
 	for _, pond in PONDS do
 		table.insert(blockedCircles, { Center = pond, Radius = POND_RADIUS + 2 })
 	end
+	table.insert(blockedCircles, { Center = STONE_CIRCLE, Radius = STONE_CIRCLE_RADIUS + 4 })
 end
 
 -- True when a prop of this radius at (x, z) stays inside the playable area and out of every zone.
@@ -332,8 +337,10 @@ local function buildTerrain()
 		Vector3.new(west - 34, 0, 112),
 		Vector3.new(west - 44, 0, 121),
 	}, 2.4)
-	-- Worn paving around the ruins.
+	-- Worn paving around the ruins and in the stone circle, which a trail links to the plaza.
 	terrain:FillCylinder(CFrame.new(west - 48, -2, 130), 4, 9, Enum.Material.Cobblestone)
+	trail(terrain, { Vector3.new(east + 20, 0, 0), STONE_CIRCLE }, 2.6)
+	terrain:FillCylinder(CFrame.new(STONE_CIRCLE - Vector3.new(0, 2, 0)), 4, STONE_CIRCLE_RADIUS + 3, Enum.Material.Cobblestone)
 
 	-- Ponds at both ends of the plaza (surface at y = 0) with a pale sandy shore.
 	for _, pond in PONDS do
@@ -613,17 +620,6 @@ local function buildGardens(decor: Folder)
 			end
 		end
 	end
-
-	-- Narrow lanes between neighbouring bases: a few flowers only, they must stay walkable.
-	for column = 1, perSide - 1 do
-		local x = (column - perSide / 2) * spacing
-		for _, side in { -1, 1 } do
-			seed += 1
-			if isFree(x, side * 84, 0.5) then
-				Flora.FlowerPatch(gardens, Vector3.new(x, 0, side * 84), 1.4, 3, seed)
-			end
-		end
-	end
 end
 
 -- Forest between the backs of the bases and the hills: a loose double row of big trees with
@@ -682,7 +678,7 @@ local function buildForest(decor: Folder)
 end
 
 -- West end (spawn side): lily ponds and ruins. East end: lake garden with a bridge, stepping
--- stones and a crystal grove.
+-- stones, a stone circle and a crystal grove.
 local function buildEnds(decor: Folder)
 	local ends = Instance.new("Folder")
 	ends.Name = "Ends"
@@ -751,6 +747,9 @@ local function buildEnds(decor: Folder)
 	Flora.Pine(ends, Vector3.new(westX + 22, 0, 112), 1.7, 505)
 	Flora.RoundTree(ends, Vector3.new(westX - 16, 0, -112), 1.4, 507)
 
+	-- The stone circle's trilithon faces the plaza and frames its floating crystal.
+	Landmarks.StoneCircle(ends, STONE_CIRCLE, STONE_CIRCLE_RADIUS, -Vector3.xAxis, CRYSTAL_COLORS[3], 520)
+
 	local eastX = MapService.HalfWidth - 40
 	for _, side in { -1, 1 } do
 		local grove = Vector3.new(eastX, 0, side * 130)
@@ -811,13 +810,13 @@ local function buildHorizon(decor: Folder)
 			Vector3.new(-40, 165, -250),
 		}
 	do
-		Horizon.Cloud(sky, cloud, rng:NextNumber(2.2, 2.8), 950 + index)
+		Horizon.Cloud(sky, cloud, rng:NextNumber(2.2, 2.8), 950 + index, viewBox)
 	end
 
 	-- Floating islands: two pour their waterfalls into the east ponds, two float over the forest.
 	local northPond, southPond = PONDS[1], PONDS[2]
-	Horizon.FloatingIsland(sky, northPond + Vector3.new(0, 62, 28), 0.9, 970, Vector3.new(0, 0, -1), 0)
-	Horizon.FloatingIsland(sky, southPond + Vector3.new(0, 66, -28), 0.9, 971, Vector3.new(0, 0, 1), 0)
+	Horizon.FloatingIsland(sky, northPond + Vector3.new(0, 62, 28), 0.9, 970, Vector3.new(0, 0, -1), 0, nil, viewBox)
+	Horizon.FloatingIsland(sky, southPond + Vector3.new(0, 66, -28), 0.9, 971, Vector3.new(0, 0, 1), 0, nil, viewBox)
 	-- The waterfalls of the forest islands land on the hills (the foot is ~16 studs out per unit of scale).
 	local halfD = MapService.HalfDepth
 	for index, island in
@@ -827,7 +826,7 @@ local function buildHorizon(decor: Folder)
 		}
 	do
 		local foot = island.Center + island.Fall * 16 * island.Scale
-		Horizon.FloatingIsland(sky, island.Center, island.Scale, 971 + index, island.Fall, groundHeight(foot.X, foot.Z))
+		Horizon.FloatingIsland(sky, island.Center, island.Scale, 971 + index, island.Fall, groundHeight(foot.X, foot.Z), nil, viewBox)
 	end
 end
 

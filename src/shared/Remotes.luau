@@ -11,7 +11,7 @@ return {
 	-- Server -> client
 	Notify = folder:WaitForChild("Notify") :: RemoteEvent,
 	Knockback = folder:WaitForChild("Knockback") :: RemoteEvent,
-	SlapFx = folder:WaitForChild("SlapFx") :: RemoteEvent, -- (slapper: Player) every client animates the swing
+	SlapFx = folder:WaitForChild("SlapFx") :: RemoteEvent, -- (slapper: Player, target: Player?) every client animates the swing
 
 	-- Client -> server
 	TeleportHome = folder:WaitForChild("TeleportHome") :: RemoteEvent,

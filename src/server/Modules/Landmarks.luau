@@ -936,6 +936,142 @@ function Landmarks.BrokenArch(parent: Instance, center: Vector3, yaw: number, se
 	return model
 end
 
+-- Stone circle -------------------------------------------------------------------------------
+
+local MOSS = Color3.fromRGB(116, 160, 98)
+
+-- Facets facing the sky are mossy.
+local function mossTop(normal: Vector3): Color3?
+	return if normal.Y > 0.8 then MOSS else nil
+end
+
+--[[
+	Three-sided standing stone (a tapered triangular prism) from just under the ground point `foot`
+	(7 triangles, ~14 parts). One side faces `inward` (horizontal unit vector) and stays an exact
+	trapezoid (a flat face for a rune); the back corner is uneven, so the top slants unless `flatTop`
+	is set. Returns the corners of the inward side: bottom left, bottom right, top right, top left.
+]]
+local function menhir(
+	model: Model,
+	foot: Vector3,
+	inward: Vector3,
+	height: number,
+	radius: number,
+	lean: number,
+	flatTop: boolean,
+	rng: Decor.Rng
+): { Vector3 }
+	-- Vertex k sits at angle phase + k * 120 degrees: the side between vertices 0 and 1 faces inward.
+	local phase = math.atan2(inward.Z, inward.X) - math.pi / 3
+	local axis = (Vector3.yAxis - inward * lean).Unit
+	local bottom, top = {}, {}
+	for k = 0, 2 do
+		local angle = phase + k * math.pi * 2 / 3
+		local out = Vector3.new(math.cos(angle), 0, math.sin(angle))
+		local back = k == 2
+		bottom[k] = foot + out * radius * (if back then rng:NextNumber(0.9, 1.15) else 1) - Vector3.new(0, 0.5, 0)
+		local h = if back and not flatTop then height - rng:NextNumber(0.5, 1.4) else height
+		top[k] = foot + axis * h + out * radius * 0.62
+	end
+	local inside = foot + axis * height * 0.45
+	local triangles = {}
+	for k = 0, 2 do
+		local k1 = (k + 1) % 3
+		addQuad(triangles, bottom[k], bottom[k1], top[k1], top[k], inside)
+	end
+	table.insert(triangles, { A = top[0], B = top[1], C = top[2], Inside = inside })
+	Decor.DrawShaded(triangles, facets("StandingStone", STONE, Enum.Material.Slate, true), model, 0.25, rng, 0.06, mossTop)
+	return { bottom[0], bottom[1], top[1], top[0] }
+end
+
+--[[
+	Ancient stone circle around a floating crystal (~110 parts): standing stones with a glowing rune
+	on their inner side and, towards `facing`, a trilithon (two uprights carrying a lintel) that
+	frames the crystal. center: ground point in the middle; facing: horizontal direction of the
+	trilithon. The stones collide, the crystal floats out of reach.
+]]
+function Landmarks.StoneCircle(parent: Instance, center: Vector3, radius: number, facing: Vector3, color: Color3, seed: number): Model
+	local rng = Decor.Rng(seed)
+	local model = newModel("StoneCircle", parent)
+	local front = math.atan2(facing.Z, facing.X)
+	local rune = glowProps("Rune", color)
+	rune.Thickness = 0.06
+
+	-- Standing stones around the back of the circle, each with a rune on the side facing the crystal.
+	for index = 1, 3 do
+		local angle = front + math.pi + (index - 2) * 1.15 + rng:NextNumber(-0.12, 0.12)
+		local out = Vector3.new(math.cos(angle), 0, math.sin(angle))
+		local height = rng:NextNumber(6.6, 8.6)
+		local face = menhir(model, center + out * radius, -out, height, 1.5, 0.06, false, rng)
+		local b0, b1, t1, t0 = face[1], face[2], face[3], face[4]
+		local across = (b1 - b0).Unit
+		local up = ((t0 + t1) / 2 - (b0 + b1) / 2).Unit
+		local normal = across:Cross(up)
+		if normal:Dot(-out) < 0 then
+			normal = -normal
+		end
+		-- Plates are centred on their plane: lift the rune by half its thickness off the stone.
+		local mid = (b0 + b1) / 2 + ((t0 + t1) / 2 - (b0 + b1) / 2) * 0.55 + normal * 0.05
+		LowPoly.Triangle(mid + up * 0.9, mid - up * 0.5 - across * 0.55, mid - up * 0.5 + across * 0.55, rune, model)
+	end
+
+	-- Trilithon: two flat-topped uprights and a lintel lying on them (its bottom face rests on their
+	-- tops; the upper corners are chipped).
+	local frontDir = Vector3.new(math.cos(front), 0, math.sin(front))
+	local tangent = Vector3.new(-frontDir.Z, 0, frontDir.X)
+	local gate = center + frontDir * radius
+	local spread, height = 2.9, 7.4
+	for _, side in { -1, 1 } do
+		menhir(model, gate + tangent * side * spread, -frontDir, height, 1.25, 0, true, rng)
+	end
+	local halfLength, halfDepth, thick = spread + 1.7, 1.1, 1.4
+	local corners = {}
+	for index, sign in
+		{
+			Vector3.new(-1, -1, -1),
+			Vector3.new(1, -1, -1),
+			Vector3.new(1, 1, -1),
+			Vector3.new(-1, 1, -1),
+			Vector3.new(-1, -1, 1),
+			Vector3.new(1, -1, 1),
+			Vector3.new(1, 1, 1),
+			Vector3.new(-1, 1, 1),
+		}
+	do
+		local chip = if sign.Y > 0
+			then Vector3.new(rng:NextNumber(-0.3, 0), rng:NextNumber(-0.25, 0), rng:NextNumber(-0.2, 0))
+			else Vector3.zero
+		corners[index] = gate
+			+ tangent * sign.X * (halfLength + chip.X)
+			+ frontDir * sign.Z * (halfDepth + chip.Z)
+			+ Vector3.new(0, height + (if sign.Y > 0 then thick + chip.Y else 0), 0)
+	end
+	Decor.DrawShaded(hexahedron(corners), facets("Lintel", STONE, Enum.Material.Slate, true), model, 0.25, rng, 0.05, mossTop)
+
+	-- Floating crystal in the middle, slowly shedding sparkles.
+	local crystalFrame = CFrame.new(center + Vector3.new(0, 5.8, 0)) * CFrame.Angles(0, rng:NextNumber(0, math.pi), 0)
+	local crystal = LowPoly.DrawTriangles(
+		meshTriangles(LowPoly.Bipyramid(3, 0.1), crystalFrame, Vector3.new(2.6, 4.6, 2.6)),
+		glowProps("CircleCrystal", color),
+		model,
+		0.12
+	)
+	if crystal[1] then
+		Decor.Light(crystal[1], color, 24, 1.8)
+		local sparkle = Instance.new("ParticleEmitter")
+		sparkle.Color = ColorSequence.new(color, Color3.new(1, 1, 1))
+		sparkle.LightEmission = 1
+		sparkle.Rate = 6
+		sparkle.Lifetime = NumberRange.new(2, 3.5)
+		sparkle.Speed = NumberRange.new(0.5, 1.5)
+		sparkle.SpreadAngle = Vector2.new(180, 180)
+		sparkle.Acceleration = Vector3.new(0, 0.6, 0)
+		sparkle.Size = NumberSequence.new(0.35, 0)
+		sparkle.Parent = crystal[1]
+	end
+	return model
+end
+
 -- Water features -----------------------------------------------------------------------------
 
 --[[

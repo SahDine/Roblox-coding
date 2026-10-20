@@ -139,8 +139,11 @@ function Horizon.Mountain(
 	return model
 end
 
--- Puffy low-poly cloud: a big puff and two smaller flat ones, shaded lavender underneath (~64 parts).
-function Horizon.Cloud(parent: Instance, center: Vector3, scale: number, seed: number): Model
+--[[
+	Puffy low-poly cloud: a big puff and two smaller flat ones, shaded lavender underneath (~64 parts,
+	fewer with a viewBox: the facets turned away from it are skipped).
+]]
+function Horizon.Cloud(parent: Instance, center: Vector3, scale: number, seed: number, viewBox: ViewBox?): Model
 	local rng = Decor.Rng(seed)
 	local model = newModel("Cloud", parent)
 	local s = scale
@@ -153,6 +156,9 @@ function Horizon.Cloud(parent: Instance, center: Vector3, scale: number, seed: n
 	for _, puff in puffs do
 		local frame = CFrame.new(center) * yaw * CFrame.new(puff[2] * s) * CFrame.Angles(0, rng:NextNumber(0, math.pi * 2), 0)
 		local triangles = LowPoly.MeshTriangles(LowPoly.TransformMesh(puff[1], frame, puff[3] * s), frame.Position)
+		if viewBox then
+			triangles = facingView(triangles, viewBox)
+		end
 		Decor.DrawShaded(triangles, farProps("Cloud", CLOUD), model, 0.6, rng, 0.02, function(normal: Vector3): Color3?
 			return if normal.Y < -0.3 then CLOUD_SHADE else nil
 		end)
@@ -165,7 +171,8 @@ end
 	spike underneath, with a tree and crystals on top and a waterfall pouring off the rim down to
 	`fallTo` (the world height of the water or ground below; the water lands in foam and mist there).
 	fallSide: horizontal direction of the waterfall. crystalColor (optional): adds a glowing crystal
-	cluster next to the tree.
+	cluster next to the tree. viewBox (optional): where the island is seen from; the facets of its
+	body turned away from it are skipped.
 ]]
 function Horizon.FloatingIsland(
 	parent: Instance,
@@ -174,7 +181,8 @@ function Horizon.FloatingIsland(
 	seed: number,
 	fallSide: Vector3,
 	fallTo: number,
-	crystalColor: Color3?
+	crystalColor: Color3?,
+	viewBox: ViewBox?
 ): Model
 	local rng = Decor.Rng(seed)
 	local model = newModel("FloatingIsland", parent)
@@ -205,6 +213,9 @@ function Horizon.FloatingIsland(
 		table.insert(rock, { A = earth[k], B = belly[k1], C = earth[k1], Inside = inside })
 		table.insert(rock, { A = earth[k], B = belly[k], C = belly[k1], Inside = inside })
 		table.insert(rock, { A = belly[k], B = tip, C = belly[k1], Inside = inside })
+	end
+	if viewBox then
+		grass, dirt, rock = facingView(grass, viewBox), facingView(dirt, viewBox), facingView(rock, viewBox)
 	end
 	Decor.DrawShaded(grass, farProps("IslandGrass", ISLAND_GRASS), model, 0.8, rng, 0.05)
 	Decor.DrawShaded(dirt, farProps("IslandEarth", ISLAND_EARTH), model, 0.8, rng, 0.06)
