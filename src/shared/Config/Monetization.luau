@@ -64,7 +64,7 @@ Monetization.GamePassOrder = { "VIP", "AutoCollect", "ExtraSlots", "FastEvolve",
 -- Kind decides which store tab shows the product and which handler grants it.
 Monetization.Products = {
 	CashSmall = {
-		Id = 0,
+		Id = 3720382194,
 		Kind = "Cash",
 		Name = "Pile of Cash",
 		Icon = "💵",
