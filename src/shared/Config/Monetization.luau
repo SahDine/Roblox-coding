@@ -15,7 +15,7 @@ local Monetization = {}
 
 Monetization.GamePasses = {
 	VIP = {
-		Id = 0,
+		Id = 2036849464,
 		Name = "VIP",
 		Description = "2x cash forever + VIP chat tag",
 		Icon = "👑",
@@ -23,35 +23,35 @@ Monetization.GamePasses = {
 		Badge = "POPULAR",
 	},
 	AutoCollect = {
-		Id = 0,
+		Id = 2043002264,
 		Name = "Auto Collect",
 		Description = "Your critters' cash goes straight to your wallet",
 		Icon = "🤖",
 		DisplayPrice = 149,
 	},
 	ExtraSlots = {
-		Id = 0,
+		Id = 2038229448,
 		Name = "+4 Slots",
 		Description = "4 more critter slots in your base",
 		Icon = "📦",
 		DisplayPrice = 199,
 	},
 	FastSteal = {
-		Id = 0,
+		Id = 2039741155,
 		Name = "Fast Thief",
 		Description = "Steal 2x faster and run faster while carrying",
 		Icon = "⚡",
 		DisplayPrice = 179,
 	},
 	FastEvolve = {
-		Id = 0,
+		Id = 2037179500,
 		Name = "Fast Evolution",
 		Description = "Your critters evolve 2x faster",
 		Icon = "🧬",
 		DisplayPrice = 149,
 	},
 	MegaSlap = {
-		Id = 0,
+		Id = 2041604832,
 		Name = "Mega Slap",
 		Description = "Golden glove: huge knockback and range",
 		Icon = "🥊",
@@ -73,7 +73,7 @@ Monetization.Products = {
 		DisplayPrice = 25,
 	},
 	CashMedium = {
-		Id = 0,
+		Id = 3720382317,
 		Kind = "Cash",
 		Name = "Bag of Cash",
 		Icon = "💰",
@@ -82,7 +82,7 @@ Monetization.Products = {
 		DisplayPrice = 79,
 	},
 	CashLarge = {
-		Id = 0,
+		Id = 3720382433,
 		Kind = "Cash",
 		Name = "Vault of Cash",
 		Icon = "🏦",
@@ -92,7 +92,7 @@ Monetization.Products = {
 		Badge = "BEST VALUE",
 	},
 	CashHuge = {
-		Id = 0,
+		Id = 3720382553,
 		Kind = "Cash",
 		Name = "Cash Tsunami",
 		Icon = "🌊",
@@ -101,7 +101,7 @@ Monetization.Products = {
 		DisplayPrice = 449,
 	},
 	ServerLuck = {
-		Id = 0,
+		Id = 3720382774,
 		Kind = "ServerLuck",
 		Name = "2x Server Luck",
 		Description = "Rare critter timers 2x faster + better odds for EVERYONE (15 min, stacks)",
@@ -111,7 +111,7 @@ Monetization.Products = {
 		Badge = "EVERYONE WINS",
 	},
 	BaseLock = {
-		Id = 0,
+		Id = 3720382895,
 		Kind = "BaseLock",
 		Name = "Super Lock",
 		Description = "Locks your base for 5 minutes",
@@ -120,7 +120,7 @@ Monetization.Products = {
 		DisplayPrice = 39,
 	},
 	InstantEvolve = {
-		Id = 0,
+		Id = 3720382980,
 		Kind = "EvolveReady", -- bought from the "Ready now" prompt on one of your critters
 		Name = "Instant Evolution",
 		Description = "Your critter is instantly ready to evolve",
@@ -128,7 +128,7 @@ Monetization.Products = {
 		DisplayPrice = 39,
 	},
 	UnitEpic = {
-		Id = 0,
+		Id = 3720383110,
 		Kind = "Unit",
 		Rarity = "Epic",
 		Name = "Random Epic",
@@ -136,7 +136,7 @@ Monetization.Products = {
 		DisplayPrice = 49,
 	},
 	UnitLegendary = {
-		Id = 0,
+		Id = 3720383276,
 		Kind = "Unit",
 		Rarity = "Legendary",
 		Name = "Random Legendary",
@@ -144,7 +144,7 @@ Monetization.Products = {
 		DisplayPrice = 99,
 	},
 	UnitMythic = {
-		Id = 0,
+		Id = 3720383429,
 		Kind = "Unit",
 		Rarity = "Mythic",
 		Name = "Random Mythic",
@@ -152,7 +152,7 @@ Monetization.Products = {
 		DisplayPrice = 249,
 	},
 	UnitSecret = {
-		Id = 0,
+		Id = 3720383530,
 		Kind = "Unit",
 		Rarity = "Secret",
 		Name = "Random Secret",
